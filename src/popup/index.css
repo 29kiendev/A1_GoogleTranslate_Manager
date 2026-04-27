@@ -1,0 +1,178 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  width: 420px;
+  min-height: 520px;
+  font-family: 'Google Sans', Roboto, system-ui, sans-serif;
+  font-size: 13px;
+  background: #fff;
+  color: #202124;
+}
+
+.popup-root { display: flex; flex-direction: column; height: 100%; min-height: 520px; }
+
+/* Header */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #1a73e8;
+  color: #fff;
+}
+.popup-title { font-size: 14px; font-weight: 600; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.due-badge {
+  background: #fff;
+  color: #1a73e8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dashboard-btn {
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dashboard-btn:hover { background: rgba(255,255,255,.25); }
+
+/* Controls */
+.popup-controls { padding: 8px 12px; border-bottom: 1px solid #e8eaed; }
+
+.search-box {
+  display: flex;
+  align-items: center;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.search-box:focus-within { border-color: #1a73e8; }
+.search-icon { font-size: 13px; opacity: .6; }
+.search-box input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+}
+.clear-btn { background: none; border: none; cursor: pointer; color: #5f6368; font-size: 12px; }
+
+.filter-row { display: flex; gap: 6px; align-items: center; }
+.folder-select {
+  flex: 1;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  outline: none;
+  background: #fff;
+}
+.folder-select:focus { border-color: #1a73e8; }
+
+.star-filter {
+  background: none;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #5f6368;
+}
+.star-filter.active { border-color: #f9ab00; color: #f9ab00; background: #fef7e0; }
+
+/* List */
+.popup-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.empty-state { text-align: center; color: #5f6368; padding: 32px 0; font-size: 13px; }
+
+/* Card */
+.card {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f3f4;
+  cursor: default;
+}
+.card:hover { background: #f8f9fa; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.lang-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #1a73e8;
+  background: #e8f0fe;
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: .3px;
+}
+.star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #bdc1c6;
+  padding: 0;
+  line-height: 1;
+}
+.star-btn.starred { color: #f9ab00; }
+
+.card-source {
+  font-size: 13px;
+  color: #202124;
+  line-height: 1.4;
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+.card-translated {
+  font-size: 12px;
+  color: #5f6368;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.card-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.card-actions button {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background: #f8f9fa;
+  cursor: pointer;
+  color: #3c4043;
+}
+.card-actions button:hover { background: #e8f0fe; border-color: #4285f4; color: #1a73e8; }
+
+/* Move overlay */
+.move-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.move-dialog {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  width: 300px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+}
+.move-title { font-weight: 600; margin-bottom: 10px; }
+.move-dialog .folder-select { width: 100%; margin-bottom: 10px; }
+.move-cancel {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 13px;
+}

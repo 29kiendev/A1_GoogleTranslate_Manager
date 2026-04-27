@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "A1 - Google Translate Manager",
+  "version": "0.1.0",
+  "description": "Save, organize, search, and review Google Translate translations.",
+  "action": {
+    "default_title": "Translate Vault",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://translate.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://translate.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*"],
+      "matches": ["https://translate.google.com/*"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
