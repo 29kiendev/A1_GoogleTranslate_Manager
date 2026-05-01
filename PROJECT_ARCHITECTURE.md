@@ -410,7 +410,19 @@ Sections and their settings:
 
 ## 13. Known Gaps / Next Session Tasks
 
-**v1.0.0 released. No outstanding gaps.** 
+**v2 work is planned in `V2_PLAN.md` (10 sessions). Implement in order.**
+
+Sessions:
+1. FAB Foundation + Pin Popup
+2. FAB UX Polish (drag, zoom, glass)
+3. Auto-translate on Paste + Action Buttons + Zoom
+4. Popup History Folder Tree
+5. Dashboard Detail Panel UX (expand to modal)
+6. Quick Language Pins + Copy Shortcut + Open in GT
+7. Folder Selector in Result + Provider Health Check
+8. Statistics Dashboard
+9. Mobile-Friendly Popup + Phrasebook Mode
+10. Context Capture + Scheduled Export + Polish 
 
 ---
 
