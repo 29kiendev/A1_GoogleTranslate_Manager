@@ -1,11 +1,12 @@
 import type { FolderId } from './folder'
+import type { ProviderType } from './provider'
 
 export interface AppSettings {
   schemaVersion: number
   captureMode: 'manual' | 'auto' | 'off'
   defaultFolderId: FolderId | null
   dedupePolicy: 'update_existing' | 'create_new' | 'ask'
-  popupDefaultView: 'recent' | 'search' | 'folders'
+  popupDefaultView: 'recent' | 'search' | 'folders' | 'translate'
   searchDebounceMs: number
   maxRecentItems: number
   showInjectedButtons: boolean
@@ -23,6 +24,11 @@ export interface AppSettings {
   privacyMode: {
     requireConfirmationBeforeSaving: boolean
     maskPopupContent: boolean
+  }
+  provider: {
+    type: ProviderType
+    apiKey: string
+    endpoint: string
   }
 }
 
@@ -49,5 +55,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   privacyMode: {
     requireConfirmationBeforeSaving: false,
     maskPopupContent: false,
+  },
+  provider: {
+    type: 'google_translate_web',
+    apiKey: '',
+    endpoint: '',
   },
 }

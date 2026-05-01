@@ -366,6 +366,7 @@ button { font-family: inherit; }
   opacity: .6;
 }
 .tag-chip-remove:hover { opacity: 1; }
+.tag-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .tag-add-btn {
   font-size: 11px;
   padding: 2px 8px;
@@ -396,6 +397,7 @@ button { font-family: inherit; }
   width: 120px;
 }
 .tag-new-input:focus { border-color: var(--blue); }
+.tag-color-input { width: 28px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: none; }
 
 /* Folder count badge */
 .folder-count {

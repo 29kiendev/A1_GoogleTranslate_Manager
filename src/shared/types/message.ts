@@ -16,6 +16,9 @@ export type MessageType =
   | 'GET_TRANSLATION'
   | 'UPDATE_TRANSLATION'
   | 'DELETE_TRANSLATION'
+  | 'RESTORE_TRANSLATION'
+  | 'PERMANENT_DELETE_TRANSLATION'
+  | 'EMPTY_TRASH'
   | 'STAR_TRANSLATION'
   | 'ENROLL_SRS'
   | 'UNENROLL_SRS'
@@ -39,6 +42,10 @@ export type MessageType =
   | 'ADD_TAG_TO_TRANSLATION'
   | 'REMOVE_TAG_FROM_TRANSLATION'
   | 'GET_FOLDER_COUNTS'
+  | 'TRANSLATE_TEXT'
+  | 'MOVE_FOLDER'
+  | 'GET_USAGE_HINT'
+  | 'GET_SMART_COLLECTION_COUNTS'
 
 export interface ExtensionMessage<TPayload = unknown> {
   type: MessageType
@@ -101,6 +108,12 @@ export interface ExportDataPayload {
 export interface ImportDataPayload {
   data: TranslateVaultExport
   options: ImportOptions
+}
+
+export interface TranslateTextPayload {
+  text: string
+  sourceLang: string
+  targetLang: string
 }
 
 // Re-export for convenience

@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
           input: {
             background: resolve(__dirname, 'src/background/index.ts'),
             content: resolve(__dirname, 'src/content/index.ts'),
-          },
+          } as Record<string, string>,
           output: {
             entryFileNames: '[name].js',
             format: 'es',
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
           popup: resolve(__dirname, 'popup.html'),
           dashboard: resolve(__dirname, 'dashboard.html'),
           options: resolve(__dirname, 'options.html'),
-        },
+        } as Record<string, string>,
         output: {
           chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name]-[hash][extname]',

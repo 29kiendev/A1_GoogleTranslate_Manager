@@ -8,8 +8,9 @@ import type { Translation, SearchTranslationsQuery, LangPairCount } from '../sha
 import type { Folder, FolderId } from '../shared/types/folder'
 import type { Tag } from '../shared/types/tag'
 import type { SmartCollection } from '../shared/types/smartCollection'
+import type { AppSettings } from '../shared/types/settings'
 
-type View = 'list' | 'review' | 'batch_import' | 'import_export' | 'settings'
+type View = 'list' | 'review' | 'batch_import' | 'settings' | 'translate'
 
 const PAGE_SIZE = 50
 
@@ -22,20 +23,24 @@ export default function DashboardApp() {
   const [loading, setLoading] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([])
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({})
+  const [collectionCounts, setCollectionCounts] = useState<Record<string, number>>({})
   const [tagsMap, setTagsMap] = useState<Map<string, Tag[]>>(new Map())
   const [dueCount, setDueCount] = useState(0)
   const [langPairs, setLangPairs] = useState<LangPairCount[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [sidebarKey, setSidebarKey] = useState<string>('all')
+  const [sidebarKey, setSidebarKey] = useState<string>('sc_all')
   const [activeQuery, setActiveQuery] = useState<SearchTranslationsQuery>({
     sortBy: 'lastUsedAt',
     sortDirection: 'desc',
     limit: PAGE_SIZE,
   })
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const [tags, setTags] = useState<Tag[]>([])
+  const [settings, setSettings] = useState<AppSettings | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const selectedItem = items.find(t => t.id === selectedId) ?? null
+  const isTrashActive = sidebarKey === 'sc_trash'
 
   const loadTagsForItems = useCallback(async (newItems: Translation[], append: boolean) => {
     const map = new Map<string, Tag[]>()
@@ -68,16 +73,22 @@ export default function DashboardApp() {
   }, [loadTagsForItems])
 
   const loadSidebar = useCallback(async () => {
-    const [fRes, lpRes, dcRes, fcRes] = await Promise.all([
+    const [fRes, lpRes, dcRes, fcRes, tRes, sRes, scRes] = await Promise.all([
       sendMessage<Folder[]>({ type: 'GET_FOLDER_TREE' }),
       sendMessage<LangPairCount[]>({ type: 'GET_LANG_PAIRS' }),
       sendMessage<number>({ type: 'GET_DUE_COUNT' }),
       sendMessage<Record<string, number>>({ type: 'GET_FOLDER_COUNTS' }),
+      sendMessage<Tag[]>({ type: 'GET_TAGS' }),
+      sendMessage<AppSettings>({ type: 'GET_SETTINGS' }),
+      sendMessage<Record<string, number>>({ type: 'GET_SMART_COLLECTION_COUNTS' }),
     ])
     if (fRes?.ok && fRes.data) setFolders(fRes.data)
     if (lpRes?.ok && lpRes.data) setLangPairs(lpRes.data)
     if (dcRes?.ok) setDueCount(dcRes.data as number ?? 0)
     if (fcRes?.ok && fcRes.data) setFolderCounts(fcRes.data)
+    if (tRes?.ok && tRes.data) setTags(tRes.data)
+    if (sRes?.ok && sRes.data) setSettings(sRes.data)
+    if (scRes?.ok && scRes.data) setCollectionCounts(scRes.data)
   }, [])
 
   useEffect(() => {
@@ -124,6 +135,23 @@ export default function DashboardApp() {
     loadTranslations(q)
   }
 
+  const selectTag = (tagId: string) => {
+    setSidebarKey(`tag_${tagId}`)
+    setSelectedId(null)
+    setSelectedIds(new Set())
+    setOffset(0)
+    const q: SearchTranslationsQuery = {
+      tagIds: [tagId],
+      q: query || undefined,
+      sortBy: 'lastUsedAt',
+      sortDirection: 'desc',
+      limit: PAGE_SIZE,
+      offset: 0,
+    }
+    setActiveQuery(q)
+    loadTranslations(q)
+  }
+
   const selectFolder = (id: FolderId) => {
     setSidebarKey(`folder_${id}`)
     setSelectedId(null)
@@ -151,10 +179,12 @@ export default function DashboardApp() {
   const handleStar = async (t: Translation) => {
     await sendMessage({ type: 'STAR_TRANSLATION', payload: t.id })
     setItems(prev => prev.map(i => i.id === t.id ? { ...i, isStarred: !i.isStarred } : i))
+    loadSidebar() // Refresh counts
   }
 
   const handleUpdated = (updated: Translation) => {
     setItems(prev => prev.map(i => i.id === updated.id ? updated : i))
+    loadSidebar()
   }
 
   const handleDeleted = (id: string) => {
@@ -174,9 +204,19 @@ export default function DashboardApp() {
   }
 
   const handleBulkDelete = async () => {
-    if (!confirm(`Delete ${selectedIds.size} translation(s)?`)) return
+    if (!confirm(isTrashActive ? `Permanently delete ${selectedIds.size} translation(s)?` : `Delete ${selectedIds.size} translation(s)?`)) return
     for (const id of selectedIds) {
-      await sendMessage({ type: 'DELETE_TRANSLATION', payload: id })
+      await sendMessage({ type: isTrashActive ? 'PERMANENT_DELETE_TRANSLATION' : 'DELETE_TRANSLATION', payload: id })
+    }
+    setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
+    setTotal(t => t - selectedIds.size)
+    setSelectedIds(new Set())
+    loadSidebar()
+  }
+
+  const handleBulkRestore = async () => {
+    for (const id of selectedIds) {
+      await sendMessage({ type: 'RESTORE_TRANSLATION', payload: id })
     }
     setItems(prev => prev.filter(i => !selectedIds.has(i.id)))
     setTotal(t => t - selectedIds.size)
@@ -190,6 +230,14 @@ export default function DashboardApp() {
     }
     setItems(prev => prev.map(i => selectedIds.has(i.id) ? { ...i, isStarred: true } : i))
     setSelectedIds(new Set())
+    loadSidebar()
+  }
+
+  const handleEmptyTrash = async () => {
+    if (!confirm('Permanently delete all items in Trash? This cannot be undone.')) return
+    await sendMessage({ type: 'EMPTY_TRASH' })
+    loadTranslations(activeQuery)
+    loadSidebar()
   }
 
   const handleImportJSON = () => {
@@ -202,12 +250,12 @@ export default function DashboardApp() {
       try {
         const text = await file.text()
         const data = JSON.parse(text)
-        const res = await sendMessage({
+        const res = await sendMessage<{ inserted: number; updated: number; skipped: number }>({
           type: 'IMPORT_DATA',
           payload: { data, options: { mergeStrategy: 'merge', duplicateStrategy: 'skip' } },
         })
-        if (res?.ok) {
-          alert(`Import complete: ${JSON.stringify(res.data)}`)
+        if (res?.ok && res.data) {
+          alert(`Import complete:\n- New items: ${res.data.inserted}\n- Updated/Merged: ${res.data.updated}\n- Skipped: ${res.data.skipped}`)
           loadTranslations(activeQuery)
           loadSidebar()
         } else {
@@ -255,6 +303,9 @@ export default function DashboardApp() {
     URL.revokeObjectURL(url)
   }
 
+  const showReviewButton = settings?.srs?.enabled && dueCount > 0
+  const streak = settings?.reviewStreak?.currentDays ?? 0
+
   return (
     <div className="layout">
       {/* Topbar */}
@@ -269,11 +320,18 @@ export default function DashboardApp() {
           />
         </div>
         <div className="topbar-actions">
-          {dueCount > 0 && (
+          {streak > 1 && (
+            <span className="streak-badge" title="Daily review streak">🔥 {streak}</span>
+          )}
+          {showReviewButton && (
             <button className="btn" onClick={() => setView('review')} style={{ color: '#1a73e8' }}>
-              🔁 Review ({dueCount})
+              🎯 Review ({dueCount})
             </button>
           )}
+          {isTrashActive && (
+            <button className="btn btn-danger" onClick={handleEmptyTrash}>Empty Trash</button>
+          )}
+          <button className="btn btn-primary" onClick={() => setView('translate')}>+ Translate</button>
           <button className="btn" onClick={() => setView('batch_import')}>+ Batch Import</button>
           <button className="btn" onClick={() => handleExport('json')}>Export JSON</button>
           <button className="btn" onClick={() => handleExport('anki_tsv')}>Export Anki</button>
@@ -289,9 +347,12 @@ export default function DashboardApp() {
           <SidebarSmartCollections
             selected={sidebarKey}
             dueCount={dueCount}
+            collectionCounts={collectionCounts}
             langPairs={langPairs}
+            tags={tags}
             onSelectCollection={selectCollection}
             onSelectLangPair={selectLangPair}
+            onSelectTag={selectTag}
           />
           <SidebarFolderTree
             folders={folders}
@@ -305,7 +366,14 @@ export default function DashboardApp() {
         {/* Main panel */}
         <div className="main-panel">
           {view === 'review' && (
-            <ReviewView dueCount={dueCount} onExit={() => { setView('list'); loadSidebar() }} />
+            <ReviewView
+              dueCount={dueCount}
+              streak={streak}
+              onExit={() => { setView('list'); loadSidebar() }}
+            />
+          )}
+          {view === 'translate' && (
+            <TranslateView folders={folders} onDone={() => { setView('list'); loadTranslations(activeQuery); loadSidebar() }} />
           )}
           {view === 'batch_import' && (
             <BatchImportView folders={folders} onDone={() => { setView('list'); loadTranslations(activeQuery); loadSidebar() }} />
@@ -319,8 +387,9 @@ export default function DashboardApp() {
                 {selectedIds.size > 0 && (
                   <div className="bulk-bar">
                     <span>{selectedIds.size} selected</span>
-                    <button className="bulk-btn" onClick={handleBulkStar}>★ Star all</button>
-                    <button className="bulk-btn" onClick={handleBulkDelete}>🗑 Delete all</button>
+                    {!isTrashActive && <button className="bulk-btn" onClick={handleBulkStar}>★ Star all</button>}
+                    {isTrashActive && <button className="bulk-btn" onClick={handleBulkRestore}>Restore selected</button>}
+                    <button className="bulk-btn" onClick={handleBulkDelete}>🗑️ {isTrashActive ? 'Delete permanently' : 'Delete all'}</button>
                     <button className="bulk-btn" onClick={() => setSelectedIds(new Set())}>Clear</button>
                   </div>
                 )}
@@ -355,15 +424,17 @@ export default function DashboardApp() {
   )
 }
 
-// ── Inline sub-views (M7, M8, M10) ─────────────────────────────────────────
+// —— Inline sub-views (M7, M8, M10) —————————————————————————————————————————————
 
-function ReviewView({ dueCount, onExit }: { dueCount: number; onExit: () => void }) {
+function ReviewView({ dueCount, streak, onExit }: { dueCount: number; streak: number; onExit: () => void }) {
   const [queue, setQueue] = useState<Translation[]>([])
   const [idx, setIdx] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [done, setDone] = useState(false)
   const [ratings, setRatings] = useState<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 4: 0 })
   const [started, setStarted] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
+  const [loadingHint, setLoadingHint] = useState(false)
 
   const start = async () => {
     const res = await sendMessage<Translation[]>({ type: 'GET_DUE_REVIEWS' })
@@ -372,16 +443,35 @@ function ReviewView({ dueCount, onExit }: { dueCount: number; onExit: () => void
 
   const rate = async (rating: 1 | 2 | 3 | 4) => {
     const current = queue[idx]
+    
+    if (rating === 1 && !hint) {
+      setLoadingHint(true)
+      const res = await sendMessage<string>({ 
+        type: 'GET_USAGE_HINT', 
+        payload: { 
+          text: current.sourceText, 
+          sourceLang: current.sourceLang || 'auto', 
+          targetLang: current.targetLang || 'en' 
+        } 
+      })
+      setLoadingHint(false)
+      if (res?.ok && res.data) {
+        setHint(res.data)
+        return // Wait for user to read hint
+      }
+    }
+
     await sendMessage({ type: 'REVIEW_TRANSLATION', payload: { id: current.id, rating } })
     setRatings(prev => ({ ...prev, [rating]: prev[rating] + 1 }))
     if (idx + 1 >= queue.length) { setDone(true) }
-    else { setIdx(i => i + 1); setRevealed(false) }
+    else { setIdx(i => i + 1); setRevealed(false); setHint(null) }
   }
 
   if (!started) return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-      <div style={{ fontSize: 40 }}>🔁</div>
+      <div style={{ fontSize: 40 }}>🎯</div>
       <div style={{ fontSize: 18, fontWeight: 600 }}>{dueCount} cards due for review</div>
+      {streak > 1 && <div style={{ fontSize: 14, color: '#ff9800' }}>🔥 {streak} day streak! Keep it up.</div>}
       <button className="btn btn-primary" onClick={start}>Start Review</button>
       <button className="btn" onClick={onExit}>Back to Vault</button>
     </div>
@@ -395,6 +485,7 @@ function ReviewView({ dueCount, onExit }: { dueCount: number; onExit: () => void
         Reviewed {queue.length} cards —
         Didn't know: {ratings[1]} · Hard: {ratings[2]} · Good: {ratings[3]} · Easy: {ratings[4]}
       </div>
+      {streak > 0 && <div style={{ fontSize: 14, color: '#ff9800' }}>🔥 Current streak: {streak} day{streak === 1 ? '' : 's'}</div>}
       <button className="btn btn-primary" onClick={onExit}>Back to Vault</button>
     </div>
   )
@@ -408,24 +499,39 @@ function ReviewView({ dueCount, onExit }: { dueCount: number; onExit: () => void
       </div>
       <div style={{ background: '#f8f9fa', border: '1px solid #e8eaed', borderRadius: 12, padding: 32, maxWidth: 500, width: '100%', textAlign: 'center' }}>
         <div style={{ fontSize: 11, color: '#1a73e8', fontWeight: 600, marginBottom: 16 }}>
-          {(card.sourceLang ?? '?').toUpperCase()} → {(card.targetLang ?? '?').toUpperCase()}
+          {((card.sourceLangLabel && card.targetLangLabel) ? `${card.sourceLangLabel} → ${card.targetLangLabel}` : `${(card.sourceLang ?? '?').toUpperCase()} → ${(card.targetLang ?? '?').toUpperCase()}`)}
         </div>
-        <div style={{ fontSize: 22, fontWeight: 500, marginBottom: revealed ? 24 : 0 }}>{card.sourceText}</div>
+        <div style={{ fontSize: 22, fontWeight: 500, marginBottom: (revealed || hint) ? 24 : 0 }}>{card.sourceText}</div>
         {revealed && (
           <div style={{ borderTop: '1px solid #e8eaed', marginTop: 16, paddingTop: 16, fontSize: 20, color: '#1a73e8', fontWeight: 500 }}>
             {card.translatedText}
           </div>
         )}
+        {hint && (
+          <div style={{ marginTop: 16, padding: 12, background: '#e8f0fe', borderRadius: 8, fontSize: 14, color: '#185abc', textAlign: 'left', fontStyle: 'italic' }}>
+            💡 {hint}
+          </div>
+        )}
+        {loadingHint && <div style={{ marginTop: 16, fontSize: 12, color: '#5f6368' }}>Fetching hint…</div>}
       </div>
       {!revealed ? (
         <button className="btn btn-primary" onClick={() => setRevealed(true)}>Reveal Translation</button>
       ) : (
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
           {([1, 2, 3, 4] as const).map(r => (
             <button key={r} className="btn" style={{ minWidth: 80 }} onClick={() => rate(r)}>
-              {r === 1 ? "1 Didn't know" : r === 2 ? '2 Hard' : r === 3 ? '3 Good' : '4 Easy'}
+              {r === 1 ? (hint ? "Got it" : "1 Again") : r === 2 ? '2 Hard' : r === 3 ? '3 Good' : '4 Easy'}
             </button>
           ))}
+          {hint && (
+            <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }} onClick={() => {
+              const current = queue[idx]
+              sendMessage({ type: 'REVIEW_TRANSLATION', payload: { id: current.id, rating: 1 } })
+              setRatings(prev => ({ ...prev, 1: prev[1] + 1 }))
+              if (idx + 1 >= queue.length) { setDone(true) }
+              else { setIdx(i => i + 1); setRevealed(false); setHint(null) }
+            }}>Got it, next card</button>
+          )}
         </div>
       )}
     </div>
@@ -515,6 +621,8 @@ function BatchImportView({ folders, onDone }: { folders: Folder[]; onDone: () =>
 
 function SettingsView({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<Record<string, unknown> | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     sendMessage<Record<string, unknown>>({ type: 'GET_SETTINGS' }).then(r => {
@@ -527,10 +635,19 @@ function SettingsView({ onClose }: { onClose: () => void }) {
     setSettings(prev => ({ ...prev, ...patch }))
   }
 
+  const testProvider = async () => {
+    setTesting(true)
+    setTestResult(null)
+    const res = await sendMessage({ type: 'TRANSLATE_TEXT', payload: { text: 'hello', sourceLang: 'en', targetLang: 'es' } })
+    setTesting(false)
+    setTestResult(res?.ok ? { ok: true, message: `OK — "${(res.data as { translatedText?: string })?.translatedText ?? (res.data as Record<string, unknown>)?.translatedText ?? 'done'}"` } : { ok: false, message: res?.error?.message ?? 'Unknown error' })
+  }
+
   if (!settings) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading…</div>
 
   const srs = settings.srs as { enabled: boolean; autoEnrollOnSave: boolean; dailyReviewLimit: number }
   const captureMode = settings.captureMode as string
+  const provider = (settings.provider ?? { type: 'mock', apiKey: '', endpoint: '' }) as { type: string; apiKey: string; endpoint: string }
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: 32, maxWidth: 560 }}>
@@ -568,6 +685,168 @@ function SettingsView({ onClose }: { onClose: () => void }) {
           <input type="number" min={1} max={200} value={srs.dailyReviewLimit} onChange={e => save({ srs: { ...srs, dailyReviewLimit: Number(e.target.value) } })} style={{ width: 60, padding: '4px 6px', border: '1px solid #e8eaed', borderRadius: 4 }} />
         </label>
       </div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Translation Provider</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ width: 120, fontSize: 12 }}>Provider</span>
+          <select value={provider.type} onChange={e => save({ provider: { ...provider, type: e.target.value } })} style={{ padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4 }}>
+            <option value="google_translate_web">Google Translate (free, no key)</option>
+            <option value="libre_translate">LibreTranslate (free)</option>
+            <option value="deepl">DeepL</option>
+            <option value="custom_http">Custom HTTP</option>
+            <option value="mock">Mock (testing)</option>
+          </select>
+        </label>
+        {(provider.type === 'libre_translate' || provider.type === 'custom_http' || provider.type === 'deepl') && (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+            <span style={{ width: 120 }}>Endpoint</span>
+            <input
+              value={provider.endpoint}
+              onChange={e => save({ provider: { ...provider, endpoint: e.target.value } })}
+              placeholder={
+                provider.type === 'libre_translate' ? 'https://libretranslate.com/translate (optional)' :
+                provider.type === 'deepl' ? 'https://api-free.deepl.com/v2/translate (optional)' :
+                'https://…'
+              }
+              style={{ flex: 1, padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4 }}
+            />
+          </label>
+        )}
+        {(provider.type === 'deepl' || provider.type === 'custom_http') && (
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+            <span style={{ width: 120 }}>API Key{provider.type === 'deepl' ? ' *' : ''}</span>
+            <input
+              type="password"
+              value={provider.apiKey}
+              onChange={e => save({ provider: { ...provider, apiKey: e.target.value } })}
+              placeholder={provider.type === 'deepl' ? 'Required' : 'Optional'}
+              style={{ flex: 1, padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4 }}
+            />
+          </label>
+        )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+          <button className="btn" onClick={testProvider} disabled={testing}>
+            {testing ? 'Testing…' : 'Test Provider'}
+          </button>
+          {testResult && (
+            <span style={{ fontSize: 12, color: testResult.ok ? '#188038' : '#d93025' }}>
+              {testResult.message}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TranslateView({ folders, onDone }: { folders: Folder[]; onDone: () => void }) {
+  const [sourceText, setSourceText] = useState('')
+  const [sourceLang, setSourceLang] = useState('en')
+  const [targetLang, setTargetLang] = useState('vi')
+  const [translating, setTranslating] = useState(false)
+  const [result, setResult] = useState<Translation | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleTranslate = async () => {
+    if (!sourceText.trim()) return
+    setTranslating(true)
+    setError(null)
+    setResult(null)
+    const res = await sendMessage<Translation>({
+      type: 'TRANSLATE_TEXT',
+      payload: { text: sourceText.trim(), sourceLang, targetLang },
+    })
+    setTranslating(false)
+    if (res?.ok && res.data) {
+      setResult(res.data)
+    } else {
+      setError(res?.error?.message ?? 'Translation failed')
+    }
+  }
+
+  const handleMoveFolder = async (folderId: string | null) => {
+    if (!result) return
+    await sendMessage({ type: 'MOVE_TRANSLATION', payload: { id: result.id, folderId } })
+    setResult(prev => prev ? { ...prev, folderId } : null)
+  }
+
+  const handleStar = async () => {
+    if (!result) return
+    await sendMessage({ type: 'STAR_TRANSLATION', payload: result.id })
+    setResult(prev => prev ? { ...prev, isStarred: !prev.isStarred } : null)
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: 32, maxWidth: 640 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <h2>Translate</h2>
+        <button className="btn" onClick={onDone}>Back to Vault</button>
+      </div>
+      <textarea
+        style={{ width: '100%', minHeight: 130, border: '1px solid #e8eaed', borderRadius: 6, padding: 10, fontSize: 14, fontFamily: 'inherit', marginBottom: 12, resize: 'vertical', outline: 'none' }}
+        placeholder="Enter text to translate…"
+        value={sourceText}
+        onChange={e => setSourceText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleTranslate() }}
+      />
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          From
+          <input value={sourceLang} onChange={e => setSourceLang(e.target.value)} style={{ width: 64, padding: '5px 8px', border: '1px solid #e8eaed', borderRadius: 4 }} />
+        </label>
+        <span style={{ color: '#5f6368', fontSize: 16 }}>→</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          To
+          <input value={targetLang} onChange={e => setTargetLang(e.target.value)} style={{ width: 64, padding: '5px 8px', border: '1px solid #e8eaed', borderRadius: 4 }} />
+        </label>
+        <button
+          className="btn btn-primary"
+          onClick={handleTranslate}
+          disabled={translating || !sourceText.trim()}
+          style={{ marginLeft: 'auto', padding: '6px 20px' }}
+        >
+          {translating ? 'Translating…' : 'Translate'}
+        </button>
+      </div>
+      {error && <div style={{ color: '#d93025', fontSize: 12, marginBottom: 12 }}>{error}</div>}
+      {result && (
+        <div style={{ border: '1px solid #e8eaed', borderRadius: 8, padding: 20, background: '#f8f9fa' }}>
+          {result.usageCount > 1 && (
+            <div style={{ fontSize: 11, color: '#b06000', background: '#fef3cd', border: '1px solid #fde68a', borderRadius: 4, padding: '3px 8px', marginBottom: 10 }}>
+              Already saved {result.usageCount}×
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#1a73e8', fontWeight: 600, marginBottom: 10 }}>
+            {((result.sourceLangLabel && result.targetLangLabel) ? `${result.sourceLangLabel} → ${result.targetLangLabel}` : `${(result.sourceLang ?? '?').toUpperCase()} → ${(result.targetLang ?? '?').toUpperCase()}`)}
+          </div>
+          <div style={{ fontSize: 17, color: '#202124', lineHeight: 1.6, marginBottom: 16, wordBreak: 'break-word' }}>
+            {result.translatedText}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+            <button className="btn" onClick={() => navigator.clipboard.writeText(result.sourceText)}>Copy Original</button>
+            <button className="btn" onClick={() => navigator.clipboard.writeText(result.translatedText)}>Copy Translation</button>
+            <button className="btn" onClick={handleStar}>
+              {result.isStarred ? '★ Starred' : '☆ Star'}
+            </button>
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <span style={{ color: '#5f6368' }}>Save to folder</span>
+            <select
+              value={result.folderId ?? ''}
+              onChange={e => handleMoveFolder(e.target.value || null)}
+              style={{ padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4, fontSize: 12 }}
+            >
+              <option value="">Uncategorized</option>
+              {folders.map(f => (
+                <option key={f.id} value={f.id}>{'  '.repeat(f.depth)}{f.name}</option>
+              ))}
+            </select>
+          </label>
+          <div style={{ marginTop: 10, fontSize: 11, color: '#5f6368' }}>
+            Saved · {new Date(result.createdAt).toLocaleString()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

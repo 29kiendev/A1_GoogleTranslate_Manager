@@ -39,6 +39,32 @@ export async function softDeleteTranslation(id: TranslationId): Promise<void> {
   await updateTranslation(id, { isDeleted: true })
 }
 
+export async function restoreTranslation(id: TranslationId): Promise<void> {
+  await updateTranslation(id, { isDeleted: false })
+}
+
+export async function hardDeleteTranslation(id: TranslationId): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction(['translations', 'translation_tags'], 'readwrite')
+  tx.objectStore('translations').delete(id)
+  const index = tx.objectStore('translation_tags').index('translationId')
+  let cursor = await index.openCursor(id)
+  while (cursor) {
+    await cursor.delete()
+    cursor = await cursor.continue()
+  }
+  await tx.done
+}
+
+export async function emptyTrash(): Promise<void> {
+  const db = await getDB()
+  const all = await db.getAll('translations')
+  const toDelete = all.filter(t => t.isDeleted)
+  for (const t of toDelete) {
+    await hardDeleteTranslation(t.id)
+  }
+}
+
 export async function getRecentTranslations(limit: number): Promise<Translation[]> {
   const db = await getDB()
   const all = await db.getAllFromIndex('translations', 'lastUsedAt')
@@ -84,6 +110,22 @@ export async function getDistinctLangPairs(): Promise<LangPairCount[]> {
   return Array.from(map.values()).sort((a, b) => b.count - a.count)
 }
 
+export async function getSmartCollectionCounts(): Promise<Record<string, number>> {
+  const db = await getDB()
+  const all = await db.getAll('translations')
+  const now = Date.now()
+  const weekStart = startOfWeek()
+  
+  return {
+    sc_all: all.filter(t => !t.isDeleted).length,
+    sc_starred: all.filter(t => !t.isDeleted && t.isStarred).length,
+    sc_due_review: all.filter(t => !t.isDeleted && t.srsEnabled && t.nextReviewAt !== null && t.nextReviewAt <= now).length,
+    sc_never_reviewed: all.filter(t => !t.isDeleted && t.lastReviewedAt === null && !t.srsEnabled).length,
+    sc_this_week: all.filter(t => !t.isDeleted && t.createdAt >= weekStart).length,
+    sc_trash: all.filter(t => t.isDeleted).length,
+  }
+}
+
 export async function searchTranslations(
   query: SearchTranslationsQuery
 ): Promise<SearchTranslationsResult> {
@@ -101,6 +143,7 @@ export async function searchTranslations(
     srsEnabled,
     dueForReview,
     neverReviewed,
+    isDeleted = false,
     limit = 50,
     offset = 0,
     sortBy = 'createdAt',
@@ -111,7 +154,7 @@ export async function searchTranslations(
   const now = Date.now()
 
   items = items.filter(t => {
-    if (t.isDeleted) return false
+    if ((t.isDeleted ?? false) !== isDeleted) return false
     if (isStarred !== undefined && t.isStarred !== isStarred) return false
     if (srsEnabled !== undefined && t.srsEnabled !== srsEnabled) return false
     if (dueForReview && !(t.srsEnabled && t.nextReviewAt !== null && t.nextReviewAt <= now)) return false
@@ -128,9 +171,6 @@ export async function searchTranslations(
     }
     return true
   })
-
-  // Subfolder filter requires folder IDs — caller should pass folderIds via folderId query
-  // (folderService resolves descendant IDs before calling search)
 
   if (tagIds && tagIds.length > 0) {
     const tagSet = new Set(tagIds)

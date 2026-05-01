@@ -1,21 +1,28 @@
 import { getBuiltinCollections } from '../../shared/constants/smartCollections'
-import type { SmartCollection } from '../../shared/types/smartCollection'
+import type { SmartCollection } from '../../shared/types/smartCollection'      
 import type { LangPairCount } from '../../shared/types/translation'
+import type { Tag } from '../../shared/types/tag'
 
 interface Props {
   selected: string | null
   dueCount: number
+  collectionCounts: Record<string, number>
   langPairs: LangPairCount[]
+  tags: Tag[]
   onSelectCollection: (c: SmartCollection) => void
   onSelectLangPair: (sourceLang: string, targetLang: string) => void
+  onSelectTag: (tagId: string) => void
 }
 
 export function SidebarSmartCollections({
   selected,
   dueCount,
+  collectionCounts,
   langPairs,
+  tags,
   onSelectCollection,
   onSelectLangPair,
+  onSelectTag,
 }: Props) {
   const collections = getBuiltinCollections()
 
@@ -23,7 +30,7 @@ export function SidebarSmartCollections({
     <>
       <div className="sidebar-section-label">Smart Collections</div>
       {collections.map(c => {
-        const count = c.id === 'sc_due_review' ? dueCount : undefined
+        const count = c.id === 'sc_due_review' ? dueCount : collectionCounts[c.id]
         return (
           <div
             key={c.id}
@@ -57,6 +64,26 @@ export function SidebarSmartCollections({
               </div>
             )
           })}
+        </>
+      )}
+      {tags.length > 0 && (
+        <>
+          <div className="sidebar-section-label">Tags</div>
+          {tags.map(tag => (
+            <div
+              key={tag.id}
+              className={`sidebar-item${selected === `tag_${tag.id}` ? ' active' : ''}`}
+              onClick={() => onSelectTag(tag.id)}
+            >
+              <span className="sidebar-item-icon">
+                {tag.color ? 
+                  <span className="tag-dot" style={{ background: tag.color, width: 8, height: 8, borderRadius: '50%', display: 'inline-block' }} /> : 
+                  '🏷️'
+                }
+              </span>
+              <span className="sidebar-item-name">{tag.name}</span>
+            </div>
+          ))}
         </>
       )}
     </>

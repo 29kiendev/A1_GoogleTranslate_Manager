@@ -1,4 +1,4 @@
-import {
+﻿import {
   getTranslationById,
   getDueReviews,
 } from '../../shared/db/repositories/translationRepository'
@@ -11,6 +11,12 @@ import { AppError } from '../../shared/types/errors'
 export async function handleGetDueReviews(): Promise<ExtensionResponse> {
   try {
     const settings = await getSettings()
+    if (!settings.srs.enabled) {
+      return {
+        ok: false,
+        error: { code: 'SRS_DISABLED', message: 'SRS reviews are disabled in settings' },
+      }
+    }
     const items = await getDueReviews(settings.srs.dailyReviewLimit)
     if (items.length === 0) {
       return { ok: false, error: { code: 'REVIEW_SESSION_EMPTY', message: 'No items due for review' } }

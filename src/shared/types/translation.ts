@@ -1,13 +1,13 @@
-export type TranslationId = string
-export type FolderId = string
-export type TagId = string
+﻿export type TranslationId = string
+export type FolderId = string     
+export type TagId = string        
 
-export interface Translation {
+export interface Translation {    
   id: TranslationId
   sourceText: string
   translatedText: string
-  sourceLang: string | null
-  targetLang: string | null
+  sourceLang: string | null       
+  targetLang: string | null       
   sourceLangLabel?: string | null
   targetLangLabel?: string | null
   provider: 'google_translate'
@@ -53,6 +53,7 @@ export interface SearchTranslationsQuery {
   srsEnabled?: boolean
   dueForReview?: boolean
   neverReviewed?: boolean
+  isDeleted?: boolean
   limit?: number
   offset?: number
   sortBy?: 'createdAt' | 'updatedAt' | 'lastUsedAt' | 'sourceText' | 'usageCount' | 'nextReviewAt'

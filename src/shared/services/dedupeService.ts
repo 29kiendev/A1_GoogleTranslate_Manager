@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid'
+﻿import { nanoid } from 'nanoid'
 import { sha256Hex } from '../utils/hash'
 import { normalizeText } from '../utils/normalizeText'
 import {
@@ -42,24 +42,28 @@ export async function saveTranslation(payload: SaveTranslationPayload): Promise<
 
   if (existing) {
     const policy = settings.dedupePolicy
-    if (policy === 'update_existing') {
-      await updateTranslation(existing.id, {
+    if (policy !== 'create_new') {
+      const updates: Partial<Translation> = {
         usageCount: existing.usageCount + 1,
         lastUsedAt: now,
         updatedAt: now,
-      })
-      return { ...existing, usageCount: existing.usageCount + 1, lastUsedAt: now, updatedAt: now }
+      }
+
+      if (settings.srs.autoEnrollOnSave && !existing.srsEnabled) {
+        Object.assign(updates, {
+          srsEnabled: true,
+          srsInterval: 1,
+          srsEaseFactor: 2.5,
+          srsRepetitions: 0,
+          nextReviewAt: now + 86_400_000,
+          lastReviewedAt: null,
+        })
+      }
+
+      await updateTranslation(existing.id, updates)
+      return { ...existing, ...updates } as Translation
     }
     // 'create_new' falls through to create
-    // 'ask' should be handled by the caller; default to update_existing
-    if (policy !== 'create_new') {
-      await updateTranslation(existing.id, {
-        usageCount: existing.usageCount + 1,
-        lastUsedAt: now,
-        updatedAt: now,
-      })
-      return { ...existing, usageCount: existing.usageCount + 1, lastUsedAt: now, updatedAt: now }
-    }
   }
 
   const sourceHash = await sha256Hex(normalizeText(payload.sourceText))

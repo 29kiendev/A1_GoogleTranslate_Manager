@@ -40,7 +40,11 @@ export function TranslationList({
         <div className="list-empty">No translations here yet</div>
       )}
       {items.map(t => {
-        const lang = `${(t.sourceLang ?? '?').toUpperCase()} → ${(t.targetLang ?? '?').toUpperCase()}`
+        const langCode = `${(t.sourceLang ?? '?').toUpperCase()} → ${(t.targetLang ?? '?').toUpperCase()}`
+        const langLabel = (t.sourceLangLabel && t.targetLangLabel)
+          ? `${t.sourceLangLabel} → ${t.targetLangLabel}`
+          : langCode
+          
         const itemTags = tagsMap.get(t.id) ?? []
         return (
           <div
@@ -53,7 +57,7 @@ export function TranslationList({
             </div>
             <div className="t-card-body">
               <div className="t-card-header">
-                <span className="t-card-lang">{lang}</span>
+                <span className="t-card-lang" title={langCode}>{langLabel}</span>
                 <button
                   className={`t-card-star${t.isStarred ? ' starred' : ''}`}
                   onClick={e => { e.stopPropagation(); onStar(t) }}
@@ -67,7 +71,23 @@ export function TranslationList({
               {itemTags.length > 0 && (
                 <div className="t-card-tags">
                   {itemTags.map(tag => (
-                    <span key={tag.id} className="tag-chip-sm">{tag.name}</span>
+                    <span key={tag.id} className="tag-chip-sm">
+                      {tag.color && (
+                        <span
+                          className="tag-dot"
+                          style={{
+                            background: tag.color,
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            display: 'inline-block',
+                            marginRight: 4,
+                            verticalAlign: 'middle'
+                          }}
+                        />
+                      )}
+                      {tag.name}
+                    </span>
                   ))}
                 </div>
               )}

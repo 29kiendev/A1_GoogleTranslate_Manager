@@ -1,6 +1,6 @@
 import { startObserver } from './dom/observer'
-import { extractTranslation } from './dom/extractor'
-import { renderToolbar, removeToolbar } from './ui/injectToolbar'
+import { extractTranslation, checkSelectors } from './dom/extractor'
+import { renderToolbar, removeToolbar, showToast, showConfirm } from './ui/injectToolbar'
 import {
   setCurrentPayload,
   getCurrentPayload,
@@ -28,11 +28,11 @@ async function checkSavedStatus(payload: ReturnType<typeof extractTranslation>):
   })
   if (res?.ok && res.data) {
     setSavedCount(res.data.total)
-    renderToolbar(getCurrentPayload(), getSavedCount(), handleSave)
+    renderToolbar(getCurrentPayload(), getSavedCount(), handleSave, checkSelectors())
   }
 }
 
-async function handleSave(): Promise<void> {
+async function performSave(): Promise<void> {
   const payload = getCurrentPayload()
   if (!payload) return
 
@@ -43,6 +43,8 @@ async function handleSave(): Promise<void> {
       translatedText: payload.translatedText,
       sourceLang: payload.sourceLang,
       targetLang: payload.targetLang,
+      sourceLangLabel: payload.sourceLangLabel,
+      targetLangLabel: payload.targetLangLabel,
       capturedFromUrl: payload.sourceUrl,
       captureMode: captureMode === 'auto' ? 'auto' : 'manual',
       metadata: { sourceUrl: payload.sourceUrl },
@@ -51,11 +53,30 @@ async function handleSave(): Promise<void> {
 
   if (res?.ok && res.data) {
     setSavedCount(res.data.usageCount)
-    renderToolbar(getCurrentPayload(), getSavedCount(), handleSave)
+    renderToolbar(getCurrentPayload(), getSavedCount(), handleSave, checkSelectors())
+    if (captureMode === 'auto' && res.data.usageCount > 1) {
+      showToast(`Already saved ${res.data.usageCount}x`)
+    }
+  }
+}
+
+async function handleSave(): Promise<void> {
+  const payload = getCurrentPayload()
+  if (!payload) return
+
+  if (requireConfirmation && captureMode !== 'auto') {
+    showConfirm(
+      () => performSave(),
+      () => {} // Do nothing on Cancel
+    )
+  } else {
+    await performSave()
   }
 }
 
 let captureMode: AppSettings['captureMode'] = 'manual'
+let requireConfirmation = false
+let showInjectedButtons = true
 
 function onTranslationDetected(
   payload: NonNullable<ReturnType<typeof extractTranslation>>
@@ -65,7 +86,7 @@ function onTranslationDetected(
     return
   }
   setCurrentPayload(payload)
-  renderToolbar(payload, null, handleSave)
+  renderToolbar(payload, null, handleSave, checkSelectors())
   checkSavedStatus(payload)
   if (captureMode === 'auto') handleSave()
 }
@@ -74,14 +95,23 @@ async function init(): Promise<void> {
   const settingsRes = await sendMessage<{ ok: boolean; data?: AppSettings }>({ type: 'GET_SETTINGS' })
   if (settingsRes?.ok && settingsRes.data) {
     captureMode = settingsRes.data.captureMode
+    requireConfirmation = settingsRes.data.privacyMode.requireConfirmationBeforeSaving
+    showInjectedButtons = settingsRes.data.showInjectedButtons
+    if (settingsRes.data.enableKeyboardShortcuts) {
+      document.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.altKey && e.shiftKey && e.key === 'S') handleSave()
+      })
+    }
   }
 
-  document.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.altKey && e.shiftKey && e.key === 'S') handleSave()
-  })
+  if (!showInjectedButtons) return
 
+  const isHealthy = checkSelectors()
   const initial = extractTranslation()
-  if (initial) onTranslationDetected(initial)
+  if (initial || !isHealthy) {
+    if (initial) onTranslationDetected(initial)
+    else renderToolbar(null, null, handleSave, false)
+  }
 
   startObserver(onTranslationDetected)
 }

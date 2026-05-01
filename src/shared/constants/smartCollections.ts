@@ -6,7 +6,7 @@ export function getBuiltinCollections(): SmartCollection[] {
     {
       id: 'sc_due_review',
       name: 'Due for Review',
-      icon: '🔁',
+      icon: '🔥',
       query: { dueForReview: true, sortBy: 'nextReviewAt', sortDirection: 'asc' },
     },
     {
@@ -18,20 +18,32 @@ export function getBuiltinCollections(): SmartCollection[] {
     {
       id: 'sc_this_week',
       name: 'Added This Week',
-      icon: '📅',
+      icon: '🗓️',
       query: { createdFrom: startOfWeek(), sortBy: 'createdAt', sortDirection: 'desc' },
     },
     {
       id: 'sc_most_used',
       name: 'Most Looked Up',
-      icon: '🔥',
+      icon: '📈',
       query: { sortBy: 'usageCount', sortDirection: 'desc', limit: 20 },
     },
     {
       id: 'sc_starred',
       name: 'Starred',
       icon: '⭐',
-      query: { isStarred: true, sortBy: 'updatedAt', sortDirection: 'desc' },
+      query: { isStarred: true, sortBy: 'lastUsedAt', sortDirection: 'desc' },
+    },
+    {
+      id: 'sc_all',
+      name: 'All Translations',
+      icon: '📚',
+      query: { sortBy: 'lastUsedAt', sortDirection: 'desc' },
+    },
+    {
+      id: 'sc_trash',
+      name: 'Trash',
+      icon: '🗑️',
+      query: { isDeleted: true, sortBy: 'updatedAt', sortDirection: 'desc' },
     },
   ]
 }

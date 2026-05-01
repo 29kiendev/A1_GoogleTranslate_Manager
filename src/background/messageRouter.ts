@@ -3,20 +3,24 @@ import {
   handleGetTranslation,
   handleUpdateTranslation,
   handleDeleteTranslation,
+  handleRestoreTranslation,
+  handlePermanentDeleteTranslation,
+  handleEmptyTrash,
   handleStarTranslation,
   handleSearchTranslations,
   handleGetRecentTranslations,
   handleMoveTranslation,
   handleGetDueCount,
   handleGetLangPairs,
+  handleGetSmartCollectionCounts,
 } from './handlers/translationHandlers'
 import {
-  handleGetFolderTree,
   handleCreateFolder,
   handleUpdateFolder,
   handleDeleteFolder,
-  handleMoveFolder,
+  handleGetFolderTree,
   handleGetFolderCounts,
+  handleMoveFolder,
 } from './handlers/folderHandlers'
 import {
   handleGetDueReviews,
@@ -24,7 +28,6 @@ import {
   handleEnrollSRS,
   handleUnenrollSRS,
 } from './handlers/reviewHandlers'
-import { handleBatchSave } from './handlers/batchHandlers'
 import {
   handleGetTags,
   handleGetTagsForTranslation,
@@ -32,104 +35,94 @@ import {
   handleAddTagToTranslation,
   handleRemoveTagFromTranslation,
 } from './handlers/tagHandlers'
-import {
-  handleExportJSON,
-  handleExportAnkiTsv,
-  handleExportMarkdown,
-  handleImportJSON,
-} from './handlers/importExportHandlers'
-import { getSettings, updateSettings } from '../shared/db/repositories/settingsRepository'
+import { handleBatchSaveTranslations } from './handlers/batchHandlers'
+import { handleExportData, handleImportData } from './handlers/importExportHandlers'
+import { handleGetSettings, handleUpdateSettings } from './handlers/settingsHandlers'
+import { handleTranslateText, handleGetUsageHint } from './handlers/providerHandlers'
 import type { ExtensionMessage, ExtensionResponse } from '../shared/types/message'
 
-export async function routeMessage(
-  message: ExtensionMessage
-): Promise<ExtensionResponse> {
-  const { type, payload } = message
-
-  switch (type) {
+export async function routeMessage(message: ExtensionMessage): Promise<ExtensionResponse> {
+  switch (message.type) {
     case 'SAVE_TRANSLATION':
-      return handleSaveTranslation(payload as never)
+      return handleSaveTranslation(message.payload as any)
     case 'BATCH_SAVE_TRANSLATIONS':
-      return handleBatchSave(payload as never)
+      return handleBatchSaveTranslations(message.payload as any)
     case 'GET_TRANSLATION':
-      return handleGetTranslation(payload as string)
+      return handleGetTranslation(message.payload as string)
     case 'UPDATE_TRANSLATION':
-      return handleUpdateTranslation(payload as never)
+      return handleUpdateTranslation(message.payload as any)
     case 'DELETE_TRANSLATION':
-      return handleDeleteTranslation(payload as string)
+      return handleDeleteTranslation(message.payload as string)
+    case 'RESTORE_TRANSLATION':
+      return handleRestoreTranslation(message.payload as string)
+    case 'PERMANENT_DELETE_TRANSLATION':
+      return handlePermanentDeleteTranslation(message.payload as string)
+    case 'EMPTY_TRASH':
+      return handleEmptyTrash()
     case 'STAR_TRANSLATION':
-      return handleStarTranslation(payload as string)
+      return handleStarTranslation(message.payload as string)
     case 'SEARCH_TRANSLATIONS':
-      return handleSearchTranslations(payload as never)
+      return handleSearchTranslations(message.payload as any)
     case 'GET_RECENT_TRANSLATIONS':
       return handleGetRecentTranslations()
     case 'MOVE_TRANSLATION':
-      return handleMoveTranslation(payload as never)
+      return handleMoveTranslation(message.payload as any)
     case 'GET_DUE_COUNT':
       return handleGetDueCount()
     case 'GET_LANG_PAIRS':
       return handleGetLangPairs()
+    case 'GET_SMART_COLLECTION_COUNTS':
+      return handleGetSmartCollectionCounts()
+
+    case 'CREATE_FOLDER':
+      return handleCreateFolder(message.payload as any)
+    case 'UPDATE_FOLDER':
+      return handleUpdateFolder((message.payload as any).id, (message.payload as any).name)
+    case 'DELETE_FOLDER':
+      return handleDeleteFolder((message.payload as any).id, (message.payload as any).mode)
+    case 'MOVE_FOLDER':
+      return handleMoveFolder((message.payload as any).id, (message.payload as any).newParentId)
     case 'GET_FOLDER_TREE':
       return handleGetFolderTree()
-    case 'CREATE_FOLDER':
-      return handleCreateFolder(payload as never)
-    case 'UPDATE_FOLDER': {
-      const p = payload as { id: string; name: string }
-      return handleUpdateFolder(p.id, p.name)
-    }
-    case 'DELETE_FOLDER': {
-      const p = payload as { id: string; mode: never }
-      return handleDeleteFolder(p.id, p.mode)
-    }
+    case 'GET_FOLDER_COUNTS':
+      return handleGetFolderCounts()
+
     case 'GET_DUE_REVIEWS':
       return handleGetDueReviews()
-    case 'REVIEW_TRANSLATION': {
-      const p = payload as { id: string; rating: never }
-      return handleReviewTranslation(p.id, p.rating)
-    }
+    case 'REVIEW_TRANSLATION':
+      return handleReviewTranslation((message.payload as any).id, (message.payload as any).rating)
     case 'ENROLL_SRS':
-      return handleEnrollSRS(payload as string)
+      return handleEnrollSRS(message.payload as string)
     case 'UNENROLL_SRS':
-      return handleUnenrollSRS(payload as string)
-    case 'EXPORT_DATA': {
-      const p = payload as { format: string; query?: never }
-      if (p.format === 'anki_tsv') return handleExportAnkiTsv(p.query)
-      if (p.format === 'markdown') return handleExportMarkdown(p.query)
-      return handleExportJSON(p.query)
-    }
-    case 'IMPORT_DATA': {
-      const p = payload as { data: never; options: never }
-      return handleImportJSON(p.data, p.options)
-    }
-    case 'GET_SETTINGS':
-      try {
-        const s = await getSettings()
-        return { ok: true, data: s }
-      } catch (e) {
-        return { ok: false, error: { code: 'UNKNOWN_ERROR', message: String(e) } }
-      }
-    case 'UPDATE_SETTINGS':
-      try {
-        const updated = await updateSettings(payload as never)
-        return { ok: true, data: updated }
-      } catch (e) {
-        return { ok: false, error: { code: 'UNKNOWN_ERROR', message: String(e) } }
-      }
+      return handleUnenrollSRS(message.payload as string)
+
     case 'GET_TAGS':
       return handleGetTags()
     case 'GET_TAGS_FOR_TRANSLATION':
-      return handleGetTagsForTranslation(payload as string)
+      return handleGetTagsForTranslation(message.payload as string)
     case 'CREATE_TAG':
-      return handleCreateTag(payload as { name: string; color?: string })
+      return handleCreateTag(message.payload as any)
     case 'ADD_TAG_TO_TRANSLATION':
-      return handleAddTagToTranslation(payload as { translationId: string; tagId: string })
+      return handleAddTagToTranslation(message.payload as any)
     case 'REMOVE_TAG_FROM_TRANSLATION':
-      return handleRemoveTagFromTranslation(payload as { translationId: string; tagId: string })
-    case 'GET_FOLDER_COUNTS':
-      return handleGetFolderCounts()
-    case 'TRANSLATION_DETECTED':
-      return { ok: true }
+      return handleRemoveTagFromTranslation(message.payload as any)
+
+    case 'EXPORT_DATA':
+      return handleExportData(message.payload as any)
+    case 'IMPORT_DATA':
+      return handleImportData(message.payload as any)
+
+    case 'GET_SETTINGS':
+      return handleGetSettings()
+    case 'UPDATE_SETTINGS':
+      return handleUpdateSettings(message.payload as any)
+
+    case 'TRANSLATE_TEXT':
+      return handleTranslateText(message.payload as any)
+    case 'GET_USAGE_HINT':
+      return handleGetUsageHint(message.payload as any)
+
     default:
-      return { ok: false, error: { code: 'UNKNOWN_ERROR', message: `Unknown message type: ${type as string}` } }
+      return { ok: false, error: { code: 'VALIDATION_ERROR', message: `Unknown message type: ${message.type}` } }
   }
 }

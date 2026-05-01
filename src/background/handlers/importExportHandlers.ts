@@ -3,14 +3,26 @@ import { getSettings } from '../../shared/db/repositories/settingsRepository'
 import type { ExtensionResponse } from '../../shared/types/message'
 import type { TranslateVaultExport, ImportOptions } from '../../shared/types/importExport'
 import type { SearchTranslationsQuery } from '../../shared/types/translation'
-import { searchTranslations } from '../../shared/db/repositories/translationRepository'
+import { searchTranslations, upsertTranslation, getTranslationByDedupeKey, updateTranslation } from '../../shared/db/repositories/translationRepository'
 import { getAllFolders } from '../../shared/db/repositories/folderRepository'
 import { getAllTags } from '../../shared/db/repositories/tagRepository'
 import { SCHEMA_VERSION } from '../../shared/constants/app'
 import { nanoid } from 'nanoid'
 import { buildDedupeKey } from '../../shared/services/dedupeService'
-import { upsertTranslation, getTranslationByDedupeKey, updateTranslation } from '../../shared/db/repositories/translationRepository'
 import type { Translation } from '../../shared/types/translation'
+import type { ExportDataPayload, ImportDataPayload } from '../../shared/types/message'
+
+export async function handleExportData(payload: ExportDataPayload): Promise<ExtensionResponse> {
+  const { format, query } = payload
+  if (format === 'json') return handleExportJSON(query)
+  if (format === 'anki_tsv') return handleExportAnkiTsv(query)
+  if (format === 'markdown') return handleExportMarkdown(query)
+  return { ok: false, error: { code: 'VALIDATION_ERROR', message: `Unsupported format: ${format}` } }
+}
+
+export async function handleImportData(payload: ImportDataPayload): Promise<ExtensionResponse> {
+  return handleImportJSON(payload.data, payload.options)
+}
 
 export async function handleExportJSON(
   query?: SearchTranslationsQuery

@@ -3,10 +3,14 @@ import {
   getTranslationById,
   updateTranslation,
   softDeleteTranslation,
+  restoreTranslation,
+  hardDeleteTranslation,
+  emptyTrash,
   searchTranslations,
   getRecentTranslations,
   getDueReviewCount,
   getDistinctLangPairs,
+  getSmartCollectionCounts,
 } from '../../shared/db/repositories/translationRepository'
 import { getSettings } from '../../shared/db/repositories/settingsRepository'
 import type { ExtensionResponse } from '../../shared/types/message'
@@ -53,6 +57,33 @@ export async function handleUpdateTranslation(
 export async function handleDeleteTranslation(id: string): Promise<ExtensionResponse> {
   try {
     await softDeleteTranslation(id)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: { code: 'DB_ERROR', message: String(e) } }
+  }
+}
+
+export async function handleRestoreTranslation(id: string): Promise<ExtensionResponse> {
+  try {
+    await restoreTranslation(id)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: { code: 'DB_ERROR', message: String(e) } }
+  }
+}
+
+export async function handlePermanentDeleteTranslation(id: string): Promise<ExtensionResponse> {
+  try {
+    await hardDeleteTranslation(id)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: { code: 'DB_ERROR', message: String(e) } }
+  }
+}
+
+export async function handleEmptyTrash(): Promise<ExtensionResponse> {
+  try {
+    await emptyTrash()
     return { ok: true }
   } catch (e) {
     return { ok: false, error: { code: 'DB_ERROR', message: String(e) } }
@@ -115,6 +146,15 @@ export async function handleGetLangPairs(): Promise<ExtensionResponse> {
   try {
     const pairs = await getDistinctLangPairs()
     return { ok: true, data: pairs }
+  } catch (e) {
+    return { ok: false, error: { code: 'DB_ERROR', message: String(e) } }
+  }
+}
+
+export async function handleGetSmartCollectionCounts(): Promise<ExtensionResponse> {
+  try {
+    const counts = await getSmartCollectionCounts()
+    return { ok: true, data: counts }
   } catch (e) {
     return { ok: false, error: { code: 'DB_ERROR', message: String(e) } }
   }

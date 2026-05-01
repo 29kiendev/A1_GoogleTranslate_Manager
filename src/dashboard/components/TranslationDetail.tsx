@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Translation } from '../../shared/types/translation'
+import type { Translation } from '../../shared/types/translation'   
 import type { Folder } from '../../shared/types/folder'
 import type { Tag } from '../../shared/types/tag'
 import { sendMessage } from '../../shared/services/messagingService'
@@ -30,6 +30,7 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
   const [tags, setTags] = useState<Tag[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#6366f1')
   const [showTagInput, setShowTagInput] = useState(false)
 
   useEffect(() => {
@@ -47,7 +48,10 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
     if (allRes?.ok && allRes.data) setAllTags(allRes.data)
   }
 
-  const lang = `${(item.sourceLang ?? '?').toUpperCase()} → ${(item.targetLang ?? '?').toUpperCase()}`
+  const langCode = `${(item.sourceLang ?? '?').toUpperCase()} → ${(item.targetLang ?? '?').toUpperCase()}`
+  const langLabel = (item.sourceLangLabel && item.targetLangLabel)
+    ? `${item.sourceLangLabel} → ${item.targetLangLabel}`
+    : langCode
 
   const handleSaveNote = async () => {
     const res = await sendMessage<Translation>({
@@ -84,6 +88,17 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
     onDeleted(item.id)
   }
 
+  const handleRestore = async () => {
+    await sendMessage({ type: 'RESTORE_TRANSLATION', payload: item.id })
+    onDeleted(item.id) // Notify parent it's gone from current view (trash)
+  }
+
+  const handlePermanentDelete = async () => {
+    if (!confirm('Permanently delete this translation? This cannot be undone.')) return
+    await sendMessage({ type: 'PERMANENT_DELETE_TRANSLATION', payload: item.id })
+    onDeleted(item.id)
+  }
+
   const handleAddExistingTag = async (tagId: string) => {
     await sendMessage({ type: 'ADD_TAG_TO_TRANSLATION', payload: { translationId: item.id, tagId } })
     await loadTags()
@@ -97,7 +112,7 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
     if (existing) {
       tagId = existing.id
     } else {
-      const res = await sendMessage<Tag>({ type: 'CREATE_TAG', payload: { name } })
+      const res = await sendMessage<Tag>({ type: 'CREATE_TAG', payload: { name, color: newTagColor } })
       if (!res?.ok || !res.data) return
       tagId = res.data.id
     }
@@ -129,8 +144,8 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
   return (
     <div className="detail-panel">
       <div className="detail-header">
-        <span className="detail-lang">{lang}</span>
-        <button className="detail-close" onClick={onClose}>✕</button>
+        <span className="detail-lang" title={langCode}>{langLabel}</span>
+        <button className="detail-close" onClick={onClose}>✖</button>
       </div>
       <div className="detail-body">
         <div className="detail-field">
@@ -164,6 +179,7 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
             {tags.map(tag => (
               <span key={tag.id} className="tag-chip">
+                {tag.color && <span className="tag-dot" style={{ background: tag.color }} />}
                 {tag.name}
                 <button className="tag-chip-remove" onClick={() => handleRemoveTag(tag.id)}>×</button>
               </span>
@@ -185,6 +201,13 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
                 onKeyDown={e => { if (e.key === 'Enter') handleCreateAndAddTag() }}
                 autoFocus
               />
+              <input
+                type="color"
+                className="tag-color-input"
+                value={newTagColor}
+                onChange={e => setNewTagColor(e.target.value)}
+                title="Tag color"
+              />
               {newTagName.trim() && (
                 <button className="tag-suggest-btn" onClick={handleCreateAndAddTag}>Add "{newTagName.trim()}"</button>
               )}
@@ -204,7 +227,7 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
         <div className="detail-field">
           <div className="detail-field-label">Spaced Repetition</div>
           <span className={`detail-srs-badge${item.srsEnabled ? ' enrolled' : ' not-enrolled'}`}>
-            {item.srsEnabled ? '🔁 Enrolled' : 'Not enrolled'}
+            {item.srsEnabled ? '🔥 Enrolled' : 'Not enrolled'}
           </span>
           {item.srsEnabled && nextReviewLabel && (
             <div className="detail-meta">{nextReviewLabel}</div>
@@ -223,15 +246,24 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
         </div>
       </div>
       <div className="detail-actions">
-        <button onClick={() => copyText(item.sourceText)}>Copy Original</button>
-        <button onClick={() => copyText(item.translatedText)}>Copy Translation</button>
-        <button onClick={copyMarkdown}>Copy Markdown</button>
-        <button onClick={copyTsv}>Copy TSV</button>
-        <button onClick={handleStar}>{item.isStarred ? '★ Unstar' : '☆ Star'}</button>
-        <button className="btn-primary" onClick={handleEnrollSRS}>
-          {item.srsEnabled ? 'Unenroll SRS' : 'Enroll in SRS'}
-        </button>
-        <button className="btn-danger" onClick={handleDelete}>Delete</button>
+        {item.isDeleted ? (
+          <>
+            <button className="btn-primary" onClick={handleRestore}>Restore</button>
+            <button className="btn-danger" onClick={handlePermanentDelete}>Delete Permanently</button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => copyText(item.sourceText)}>Copy Original</button>
+            <button onClick={() => copyText(item.translatedText)}>Copy Translation</button>
+            <button onClick={copyMarkdown}>Copy Markdown</button>
+            <button onClick={copyTsv}>Copy TSV</button>
+            <button onClick={handleStar}>{item.isStarred ? '★ Unstar' : '☆ Star'}</button>
+            <button className="btn-primary" onClick={handleEnrollSRS}>
+              {item.srsEnabled ? 'Unenroll SRS' : 'Enroll in SRS'}
+            </button>
+            <button className="btn-danger" onClick={handleDelete}>Delete</button>
+          </>
+        )}
       </div>
     </div>
   )

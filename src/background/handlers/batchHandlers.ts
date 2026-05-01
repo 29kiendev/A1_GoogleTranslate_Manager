@@ -1,4 +1,4 @@
-import { nanoid } from 'nanoid'
+﻿import { nanoid } from 'nanoid'
 import { buildDedupeKey } from '../../shared/services/dedupeService'
 import {
   getTranslationByDedupeKey,
@@ -11,7 +11,7 @@ import type { Translation } from '../../shared/types/translation'
 import { sha256Hex } from '../../shared/utils/hash'
 import { normalizeText } from '../../shared/utils/normalizeText'
 
-export async function handleBatchSave(input: BatchImportInput): Promise<ExtensionResponse> {
+export async function handleBatchSaveTranslations(input: BatchImportInput): Promise<ExtensionResponse> {
   const result: BatchImportResult = {
     total: input.rows.length,
     inserted: 0,

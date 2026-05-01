@@ -10,13 +10,13 @@ export interface TranslateVaultDB extends DBSchema {
     indexes: {
       dedupeKey: string
       folderId: string
-      isDeleted: boolean
-      isStarred: boolean
+      isDeleted: number
+      isStarred: number
       createdAt: number
       lastUsedAt: number
       usageCount: number
       nextReviewAt: number
-      srsEnabled: boolean
+      srsEnabled: number
       sourceLang: string
       targetLang: string
     }
@@ -26,7 +26,7 @@ export interface TranslateVaultDB extends DBSchema {
     value: Folder
     indexes: {
       parentId: string
-      isDeleted: boolean
+      isDeleted: number
     }
   }
   tags: {
