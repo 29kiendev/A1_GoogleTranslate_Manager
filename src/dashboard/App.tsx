@@ -109,6 +109,7 @@ export default function DashboardApp() {
   }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectCollection = (c: SmartCollection) => {
+    setView('list')
     setSidebarKey(c.id)
     setSelectedId(null)
     setSelectedIds(new Set())
@@ -119,6 +120,7 @@ export default function DashboardApp() {
   }
 
   const selectLangPair = (sourceLang: string, targetLang: string) => {
+    setView('list')
     const key = `lp_${sourceLang}_${targetLang}`
     setSidebarKey(key)
     setSelectedId(null)
@@ -138,6 +140,7 @@ export default function DashboardApp() {
   }
 
   const selectTag = (tagId: string) => {
+    setView('list')
     setSidebarKey(`tag_${tagId}`)
     setSelectedId(null)
     setSelectedIds(new Set())
@@ -155,6 +158,7 @@ export default function DashboardApp() {
   }
 
   const selectFolder = (id: FolderId) => {
+    setView('list')
     setSidebarKey(`folder_${id}`)
     setSelectedId(null)
     setSelectedIds(new Set())

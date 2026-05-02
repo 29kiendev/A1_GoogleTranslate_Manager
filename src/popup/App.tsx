@@ -55,6 +55,7 @@ const LANGUAGES = [
   { code: 'jw', name: 'Javanese' },
   { code: 'kn', name: 'Kannada' },
   { code: 'kk', name: 'Kazakh' },
+  { code: 'kk', name: 'Kazakh' },
   { code: 'km', name: 'Khmer' },
   { code: 'rw', name: 'Kinyarwanda' },
   { code: 'ko', name: 'Korean' },
@@ -162,6 +163,7 @@ export default function PopupApp() {
   const [historyView, setHistoryView] = useState<'list' | 'tree'>('list')
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const translateRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Review tab state
   const [reviewQueue, setReviewQueue] = useState<Translation[]>([])
@@ -290,10 +292,24 @@ export default function PopupApp() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [tab, translateResult])
 
+  useEffect(() => {
+    clearTimeout(translateRef.current)
+    if (!sourceText.trim()) {
+      setTranslateResult(null)
+      setTranslateError(null)
+      return
+    }
+    translateRef.current = setTimeout(() => handleTranslate(), 600)
+    return () => clearTimeout(translateRef.current)
+  }, [sourceText, sourceLang, targetLang]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSwap = () => {
-    if (sourceLang === 'auto') return
+    const effectiveSource = sourceLang === 'auto'
+      ? (translateResult?.sourceLang ?? null)
+      : sourceLang
+    if (!effectiveSource) return
     setSourceLang(targetLang)
-    setTargetLang(sourceLang)
+    setTargetLang(effectiveSource)
     if (translateResult) {
       setSourceText(translateResult.translatedText)
       setTranslateResult(null)
@@ -461,7 +477,7 @@ export default function PopupApp() {
               <button
                 className="gt-swap-btn"
                 onClick={handleSwap}
-                disabled={sourceLang === 'auto'}
+                disabled={sourceLang === 'auto' && !translateResult}
                 title="Swap languages"
               >
                 ⇄
@@ -490,7 +506,6 @@ export default function PopupApp() {
                   if (pasted.trim()) {
                     setSourceText(pasted)
                     setTranslateResult(null)
-                    setTimeout(() => handleTranslate(pasted), 300)
                   }
                 }}
                 autoFocus
@@ -530,7 +545,7 @@ export default function PopupApp() {
                     {translateResult.usageCount > 1 && (
                       <div className="gt-duplicate-notice">Saved {translateResult.usageCount}×</div>
                     )}
-                    <div className="gt-result-text" style={{ fontSize: `${fontScale * 22}px` }}>{translateResult.translatedText}</div>
+                    <div className="gt-result-text" style={{ fontSize: `${fontScale * 18}px` }}>{translateResult.translatedText}</div>
                     <div className="gt-result-footer">
                       <button className="gt-action-btn" onClick={handleCopyResult} title={copied ? 'Copied!' : 'Copy translation'}>
                         {copied ? (
