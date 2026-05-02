@@ -695,6 +695,18 @@ function SettingsView({ onClose }: { onClose: () => void }) {
     setSettings(prev => ({ ...prev, ...patch }))
   }
 
+  const handleExportBackup = async () => {
+    const res = await sendMessage<object>({ type: 'EXPORT_DATA', payload: { format: 'json' } })
+    if (!res?.ok || !res.data) return
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `translate-vault-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const testProvider = async () => {
     setTesting(true)
     setTestResult(null)
@@ -705,9 +717,9 @@ function SettingsView({ onClose }: { onClose: () => void }) {
 
   if (!settings) return <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading…</div>
 
-  const srs = settings.srs as { enabled: boolean; autoEnrollOnSave: boolean; dailyReviewLimit: number }
+  const srs = (settings.srs ?? { enabled: true, autoEnrollOnSave: false, dailyReviewLimit: 20 }) as { enabled: boolean; autoEnrollOnSave: boolean; dailyReviewLimit: number }
   const captureMode = settings.captureMode as string
-  const provider = (settings.provider ?? { type: 'mock', apiKey: '', endpoint: '' }) as { type: string; apiKey: string; endpoint: string }
+  const provider = (settings.provider ?? { type: 'google_translate_web', apiKey: '', endpoint: '' }) as { type: string; apiKey: string; endpoint: string }
 
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: 32, maxWidth: 560 }}>
@@ -715,6 +727,19 @@ function SettingsView({ onClose }: { onClose: () => void }) {
         <h2>Settings</h2>
         <button className="btn" onClick={onClose}>Close</button>
       </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Learning Mode</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+          <input
+            type="checkbox"
+            checked={(settings.learningMode as any)?.enabled ?? true}
+            onChange={e => save({ learningMode: { enabled: e.target.checked } })}
+          />
+          Enable learning features (Review, Phrasebook, SRS)
+        </label>
+      </div>
+
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 10 }}>Capture</div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -730,6 +755,7 @@ function SettingsView({ onClose }: { onClose: () => void }) {
           Show toolbar on Google Translate
         </label>
       </div>
+
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 10 }}>Spaced Repetition</div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
@@ -745,6 +771,7 @@ function SettingsView({ onClose }: { onClose: () => void }) {
           <input type="number" min={1} max={200} value={srs.dailyReviewLimit} onChange={e => save({ srs: { ...srs, dailyReviewLimit: Number(e.target.value) } })} style={{ width: 60, padding: '4px 6px', border: '1px solid #e8eaed', borderRadius: 4 }} />
         </label>
       </div>
+
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 10 }}>Translation Provider</div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -794,6 +821,83 @@ function SettingsView({ onClose }: { onClose: () => void }) {
             </span>
           )}
         </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Floating Button (FAB)</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+          <input type="checkbox" checked={(settings.fab as any)?.enabled ?? false}
+            onChange={e => save({ fab: { ...((settings.fab as any) ?? {}), enabled: e.target.checked } })} />
+          Enable floating translate button on web pages
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+          <input type="checkbox" checked={(settings.fab as any)?.autoHide ?? true}
+            onChange={e => save({ fab: { ...((settings.fab as any) ?? {}), autoHide: e.target.checked } })} />
+          Auto-hide after 3 seconds of inactivity
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ width: 120, fontSize: 12 }}>Open mode</span>
+          <select value={(settings.fab as any)?.openMode ?? 'inline'}
+            onChange={e => save({ fab: { ...((settings.fab as any) ?? {}), openMode: e.target.value } })}
+            style={{ padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4 }}>
+            <option value="inline">Inline overlay</option>
+            <option value="window">Separate window</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ width: 120, fontSize: 12 }}>Button side</span>
+          <select value={(settings.fab as any)?.position?.side ?? 'right'}
+            onChange={e => save({ fab: { ...((settings.fab as any) ?? {}), position: { ...((settings.fab as any)?.position ?? {}), side: e.target.value } } })}
+            style={{ padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4 }}>
+            <option value="right">Right</option>
+            <option value="left">Left</option>
+          </select>
+        </label>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Keyboard Shortcuts</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+          <input type="checkbox" checked={settings.enableKeyboardShortcuts as boolean}
+            onChange={e => save({ enableKeyboardShortcuts: e.target.checked })} />
+          Enable Alt+Shift+S to save on Google Translate
+        </label>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Privacy</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: 12 }}>
+          <input type="checkbox"
+            checked={(settings.privacyMode as any)?.requireConfirmationBeforeSaving ?? false}
+            onChange={e => save({ privacyMode: { ...((settings.privacyMode as any) ?? {}), requireConfirmationBeforeSaving: e.target.checked } })} />
+          Require confirmation before saving
+        </label>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+          <input type="checkbox"
+            checked={(settings.privacyMode as any)?.maskPopupContent ?? false}
+            onChange={e => save({ privacyMode: { ...((settings.privacyMode as any) ?? {}), maskPopupContent: e.target.checked } })} />
+          Mask popup content (blur history list)
+        </label>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Popup Defaults</div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ width: 120, fontSize: 12 }}>Default view</span>
+          <select value={settings.popupDefaultView as string}
+            onChange={e => save({ popupDefaultView: e.target.value })}
+            style={{ padding: '4px 8px', border: '1px solid #e8eaed', borderRadius: 4 }}>
+            <option value="translate">Translate</option>
+            <option value="recent">Recent history</option>
+          </select>
+        </label>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Data</div>
+        <button className="btn" onClick={handleExportBackup} style={{ marginRight: 8 }}>
+          Download JSON backup
+        </button>
       </div>
     </div>
   )
