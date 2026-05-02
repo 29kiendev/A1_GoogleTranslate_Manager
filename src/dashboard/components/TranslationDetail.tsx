@@ -230,7 +230,7 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
           </select>
         </div>
 
-        {renderPhrasebookSelector()}
+        {phrasebooks.length > 0 && renderPhrasebookSelector()}
 
         <div className="detail-field">
           <div className="detail-field-label">Tags</div>
@@ -337,7 +337,7 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
                     {folders.map(f => <option key={f.id} value={f.id}>{'  '.repeat(f.depth)}{f.name}</option>)}
                   </select>
                 </div>
-                {renderPhrasebookSelector()}
+                {phrasebooks.length > 0 && renderPhrasebookSelector()}
               </div>
 
               <div style={{ flex: 1, minWidth: '200px' }}>

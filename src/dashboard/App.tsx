@@ -4,7 +4,7 @@ import { SidebarFolderTree } from './components/SidebarFolderTree'
 import { TranslationList } from './components/TranslationList'
 import { TranslationDetail } from './components/TranslationDetail'
 import { sendMessage } from '../shared/services/messagingService'
-import { startOfWeek, formatDate } from '../shared/utils/date'
+import { startOfWeek } from '../shared/utils/date'
 import type { Translation, SearchTranslationsQuery, LangPairCount } from '../shared/types/translation'
 import type { Folder, FolderId } from '../shared/types/folder'
 import type { Tag } from '../shared/types/tag'
@@ -38,6 +38,7 @@ export default function DashboardApp() {
   })
   const [tags, setTags] = useState<Tag[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const selectedItem = items.find(t => t.id === selectedId) ?? null
@@ -336,10 +337,18 @@ export default function DashboardApp() {
           <button className="btn" onClick={() => setView('batch_import')}>+ Batch Import</button>
           <button className="btn" onClick={() => setView('stats')} title="Statistics">📊 Stats</button>
           <button className="btn" onClick={() => setView('phrasebook')} title="Phrasebook">📚 Phrasebook</button>
-          <button className="btn" onClick={() => handleExport('json')}>Export JSON</button>
-          <button className="btn" onClick={() => handleExport('anki_tsv')}>Export Anki</button>
-          <button className="btn" onClick={() => handleExport('markdown')}>Export MD</button>
-          <button className="btn" onClick={handleImportJSON}>Import JSON</button>
+          <div style={{ position: 'relative' }}>
+            <button className="btn" onClick={() => setMoreOpen(v => !v)}>⋯ More</button>
+            {moreOpen && (
+              <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#fff', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,.12)', zIndex: 50, minWidth: 160, padding: '4px 0' }} onClick={() => setMoreOpen(false)}>
+                <button className="btn" style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 0, padding: '8px 16px' }} onClick={() => handleExport('json')}>Export JSON</button>
+                <button className="btn" style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 0, padding: '8px 16px' }} onClick={() => handleExport('anki_tsv')}>Export Anki TSV</button>
+                <button className="btn" style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 0, padding: '8px 16px' }} onClick={() => handleExport('markdown')}>Export Markdown</button>
+                <hr style={{ margin: '4px 0', borderColor: 'var(--border)' }} />
+                <button className="btn" style={{ display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 0, padding: '8px 16px' }} onClick={handleImportJSON}>Import JSON</button>
+              </div>
+            )}
+          </div>
           <button className="btn-icon" title="Settings" onClick={() => setView('settings')}>⚙</button>
         </div>
       </div>
@@ -884,7 +893,7 @@ function StatsView({ langPairs, dueCount }: { langPairs: LangPairCount[], dueCou
           if (weeks[w] !== undefined) weeks[w]++
         })
         setWeeklyData(Object.entries(weeks).map(([w, count]) => ({
-          label: formatDate(Number(w)),
+          label: new Date(Number(w)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
           count
         })))
       }
@@ -911,6 +920,9 @@ function StatsView({ langPairs, dueCount }: { langPairs: LangPairCount[], dueCou
       <h2 style={{ marginBottom: 32 }}>Statistics</h2>
       <section className="stats-section">
         <h3>Saves per week (last 8 weeks)</h3>
+        {weeklyData.every(d => d.count === 0) ? (
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>No data yet</p>
+        ) : (
         <div className="stats-chart-v">
           {weeklyData.map(d => (
             <div key={d.label} className="stats-bar-col">
@@ -923,6 +935,7 @@ function StatsView({ langPairs, dueCount }: { langPairs: LangPairCount[], dueCou
             </div>
           ))}
         </div>
+        )}
       </section>
       <section className="stats-section">
         <h3>Top language pairs</h3>

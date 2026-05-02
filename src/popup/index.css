@@ -243,20 +243,6 @@ body {
   border-radius: 50%;
 }
 .gt-zoom-btn:hover { background: #e8eaed; color: #202124; }
-.gt-translate-btn {
-  background: #1a73e8;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.gt-translate-btn:hover:not(:disabled) { background: #1558b0; }
-.gt-translate-btn:disabled { opacity: .5; cursor: default; }
 
 .gt-retranslate-btn {
   width: 32px;
