@@ -29,6 +29,7 @@ export default function DashboardApp() {
   const [dueCount, setDueCount] = useState(0)
   const [langPairs, setLangPairs] = useState<LangPairCount[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [autoExpandId, setAutoExpandId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sidebarKey, setSidebarKey] = useState<string>('sc_all')
   const [activeQuery, setActiveQuery] = useState<SearchTranslationsQuery>({
@@ -41,7 +42,8 @@ export default function DashboardApp() {
   const [moreOpen, setMoreOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const selectedItem = items.find(t => t.id === selectedId) ?? null
+  const selectedIndex = items.findIndex(t => t.id === selectedId)
+  const selectedItem = items[selectedIndex] ?? null
   const isTrashActive = sidebarKey === 'sc_trash'
 
   const loadTagsForItems = useCallback(async (newItems: Translation[], append: boolean) => {
@@ -90,7 +92,7 @@ export default function DashboardApp() {
     if (fcRes?.ok && fcRes.data) setFolderCounts(fcRes.data)
     if (tRes?.ok && tRes.data) setTags(tRes.data)
     if (sRes?.ok && sRes.data) setSettings(sRes.data)
-    if (scRes?.ok && scRes.data) setCollectionCounts(scRes.data)
+    if (scRes?.ok && scRes.data) setCollectionCounts(scRes.data ?? {})
   }, [])
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export default function DashboardApp() {
     setView('list')
     setSidebarKey(c.id)
     setSelectedId(null)
+    setAutoExpandId(null)
     setSelectedIds(new Set())
     setOffset(0)
     const q: SearchTranslationsQuery = { ...c.query, q: query || undefined, limit: PAGE_SIZE, offset: 0 }
@@ -124,6 +127,7 @@ export default function DashboardApp() {
     const key = `lp_${sourceLang}_${targetLang}`
     setSidebarKey(key)
     setSelectedId(null)
+    setAutoExpandId(null)
     setSelectedIds(new Set())
     setOffset(0)
     const q: SearchTranslationsQuery = {
@@ -143,6 +147,7 @@ export default function DashboardApp() {
     setView('list')
     setSidebarKey(`tag_${tagId}`)
     setSelectedId(null)
+    setAutoExpandId(null)
     setSelectedIds(new Set())
     setOffset(0)
     const q: SearchTranslationsQuery = {
@@ -161,6 +166,7 @@ export default function DashboardApp() {
     setView('list')
     setSidebarKey(`folder_${id}`)
     setSelectedId(null)
+    setAutoExpandId(null)
     setSelectedIds(new Set())
     setOffset(0)
     const q: SearchTranslationsQuery = {
@@ -188,6 +194,27 @@ export default function DashboardApp() {
     loadSidebar() // Refresh counts
   }
 
+  const handleDoubleClick = (t: Translation) => {
+    setSelectedId(t.id)
+    setAutoExpandId(t.id)
+  }
+
+  const handlePrev = () => {
+    if (selectedIndex > 0) {
+      setSelectedId(items[selectedIndex - 1].id)
+      setAutoExpandId(null)
+    }
+  }
+
+  const handleNext = () => {
+    if (selectedIndex < items.length - 1) {
+      setSelectedId(items[selectedIndex + 1].id)
+      setAutoExpandId(null)
+    } else if (items.length < total) {
+      handleLoadMore()
+    }
+  }
+
   const handleUpdated = (updated: Translation) => {
     setItems(prev => prev.map(i => i.id === updated.id ? updated : i))
     loadSidebar()
@@ -197,6 +224,7 @@ export default function DashboardApp() {
     setItems(prev => prev.filter(i => i.id !== id))
     setTotal(t => t - 1)
     setSelectedId(null)
+    setAutoExpandId(null)
     loadSidebar()
   }
 
@@ -422,8 +450,9 @@ export default function DashboardApp() {
                   selectedIds={selectedIds}
                   loading={loading}
                   tagsMap={tagsMap}
-                  onSelect={t => setSelectedId(t.id)}
+                  onSelect={t => { setSelectedId(t.id); setAutoExpandId(null) }}
                   onToggleSelect={handleToggleSelect}
+                  onDoubleClick={handleDoubleClick}
                   onStar={handleStar}
                   onLoadMore={handleLoadMore}
                   hasMore={items.length < total}
@@ -433,7 +462,12 @@ export default function DashboardApp() {
                 <TranslationDetail
                   item={selectedItem}
                   folders={folders}
-                  onClose={() => setSelectedId(null)}
+                  autoExpand={autoExpandId === selectedItem.id}
+                  hasPrev={selectedIndex > 0}
+                  hasNext={selectedIndex < total - 1}
+                  onPrev={handlePrev}
+                  onNext={handleNext}
+                  onClose={() => { setSelectedId(null); setAutoExpandId(null) }}
                   onUpdated={handleUpdated}
                   onDeleted={handleDeleted}
                 />

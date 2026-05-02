@@ -247,6 +247,23 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .detail-lang { font-size: 12px; font-weight: 600; color: var(--blue); }
+
+.detail-nav-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.detail-nav-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.detail-nav-btn:disabled { opacity: 0.3; cursor: default; }
+
 .detail-close {
   background: none;
   border: none;

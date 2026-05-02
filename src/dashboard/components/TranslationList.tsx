@@ -10,6 +10,7 @@ interface Props {
   tagsMap: Map<string, Tag[]>
   onSelect: (t: Translation) => void
   onToggleSelect: (id: string) => void
+  onDoubleClick?: (t: Translation) => void
   onStar: (t: Translation) => void
   onLoadMore: () => void
   hasMore: boolean
@@ -24,6 +25,7 @@ export function TranslationList({
   tagsMap,
   onSelect,
   onToggleSelect,
+  onDoubleClick,
   onStar,
   onLoadMore,
   hasMore,
@@ -51,6 +53,7 @@ export function TranslationList({
             key={t.id}
             className={`t-card${selected === t.id ? ' selected' : ''}`}
             onClick={() => onSelect(t)}
+            onDoubleClick={() => onDoubleClick?.(t)}
           >
             <div className="t-card-check" onClick={e => { e.stopPropagation(); onToggleSelect(t.id) }}>
               <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => {}} />

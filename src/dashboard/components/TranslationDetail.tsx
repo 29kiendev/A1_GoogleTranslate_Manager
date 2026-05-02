@@ -8,6 +8,11 @@ import { formatDate } from '../../shared/utils/date'
 interface Props {
   item: Translation
   folders: Folder[]
+  autoExpand?: boolean
+  hasPrev?: boolean
+  hasNext?: boolean
+  onPrev?: () => void
+  onNext?: () => void
   onClose: () => void
   onUpdated: (updated: Translation) => void
   onDeleted: (id: string) => void
@@ -24,7 +29,18 @@ function copyText(text: string) {
   })
 }
 
-export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted }: Props) {
+export function TranslationDetail({
+  item,
+  folders,
+  autoExpand,
+  hasPrev,
+  hasNext,
+  onPrev,
+  onNext,
+  onClose,
+  onUpdated,
+  onDeleted,
+}: Props) {
   const [note, setNote] = useState(item.note ?? '')
   const [noteDirty, setNoteDirty] = useState(false)
   const [tags, setTags] = useState<Tag[]>([])
@@ -73,6 +89,10 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
       return () => window.removeEventListener('keydown', h)
     }
   }, [expanded])
+
+  useEffect(() => {
+    if (autoExpand) setExpanded(true)
+  }, [autoExpand])
 
   const handleSaveNote = async () => {
     const res = await sendMessage<Translation>({
@@ -193,11 +213,30 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
     </div>
   )
 
+  const renderNav = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button
+        className="detail-nav-btn"
+        onClick={onPrev}
+        disabled={!hasPrev}
+        title="Previous item"
+      >←</button>
+      <button
+        className="detail-nav-btn"
+        onClick={onNext}
+        disabled={!hasNext}
+        title="Next item"
+      >→</button>
+    </div>
+  )
+
   return (
     <div className="detail-panel">
       <div className="detail-header">
         <span className="detail-lang" title={langCode}>{langLabel}</span>
         <div style={{ display: 'flex', alignItems: 'center' }}>
+          {renderNav()}
+          <div style={{ width: 8 }} />
           <button className="detail-expand-btn" onClick={() => setExpanded(true)} title="Expand view">⤢</button>
           <button className="detail-close" onClick={onClose}>✖</button>
         </div>
@@ -304,7 +343,10 @@ export function TranslationDetail({ item, folders, onClose, onUpdated, onDeleted
         <div className="detail-modal-overlay" onClick={() => setExpanded(false)}>
           <div className="detail-modal" onClick={e => e.stopPropagation()}>
             <div className="detail-modal-header">
-              <span>{item.sourceText.substring(0, 80)}{item.sourceText.length > 80 ? '…' : ''}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                <span>{item.sourceText.substring(0, 80)}{item.sourceText.length > 80 ? '…' : ''}</span>
+                {renderNav()}
+              </div>
               <button onClick={() => setExpanded(false)}>✕</button>
             </div>
             
