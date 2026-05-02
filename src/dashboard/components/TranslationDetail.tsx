@@ -45,6 +45,10 @@ export function TranslationDetail({
 }: Props) {
   const [note, setNote] = useState(item.note ?? '')
   const [noteDirty, setNoteDirty] = useState(false)
+  const [editingSource, setEditingSource] = useState(false)
+  const [editingTranslation, setEditingTranslation] = useState(false)
+  const [sourceEdit, setSourceEdit] = useState(item.sourceText)
+  const [translationEdit, setTranslationEdit] = useState(item.translatedText)
   const [tags, setTags] = useState<Tag[]>([])
   const [allTags, setAllTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState('')
@@ -78,6 +82,10 @@ export function TranslationDetail({
   useEffect(() => {
     setNote(item.note ?? '')
     setNoteDirty(false)
+    setSourceEdit(item.sourceText)
+    setTranslationEdit(item.translatedText)
+    setEditingSource(false)
+    setEditingTranslation(false)
     loadTags()
     loadPhrasebooks()
   }, [item.id, loadTags, loadPhrasebooks])
@@ -103,6 +111,18 @@ export function TranslationDetail({
     })
     if (res?.ok && res.data) onUpdated(res.data)
     setNoteDirty(false)
+  }
+
+  const handleSaveEdits = async (field: 'sourceText' | 'translatedText', value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return
+    const res = await sendMessage<Translation>({
+      type: 'UPDATE_TRANSLATION',
+      payload: { id: item.id, patch: { [field]: trimmed } },
+    })
+    if (res?.ok && res.data) onUpdated(res.data)
+    if (field === 'sourceText') setEditingSource(false)
+    else setEditingTranslation(false)
   }
 
   const handleStar = async () => {
@@ -246,7 +266,23 @@ export function TranslationDetail({
       <div className="detail-body">
         <div className="detail-field">
           <div className="detail-field-label">Original</div>
-          <div className="detail-field-value">{item.sourceText}</div>
+          {editingSource ? (
+            <textarea
+              className="detail-note-input"
+              autoFocus
+              value={sourceEdit}
+              onChange={e => setSourceEdit(e.target.value)}
+              onBlur={() => handleSaveEdits('sourceText', sourceEdit)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSaveEdits('sourceText', sourceEdit) }}
+            />
+          ) : (
+            <div
+              className="detail-field-value"
+              title="Click to edit"
+              style={{ cursor: 'text' }}
+              onClick={() => { setSourceEdit(item.sourceText); setEditingSource(true) }}
+            >{item.sourceText}</div>
+          )}
           {item.metadata?.context && (
             <div className="detail-context" style={{ marginTop: 8 }}>
               <span className="detail-field-label" style={{ fontSize: 11 }}>Context</span>
@@ -256,7 +292,23 @@ export function TranslationDetail({
         </div>
         <div className="detail-field">
           <div className="detail-field-label">Translation</div>
-          <div className="detail-field-value translated">{item.translatedText}</div>
+          {editingTranslation ? (
+            <textarea
+              className="detail-note-input"
+              autoFocus
+              value={translationEdit}
+              onChange={e => setTranslationEdit(e.target.value)}
+              onBlur={() => handleSaveEdits('translatedText', translationEdit)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSaveEdits('translatedText', translationEdit) }}
+            />
+          ) : (
+            <div
+              className="detail-field-value translated"
+              title="Click to edit"
+              style={{ cursor: 'text' }}
+              onClick={() => { setTranslationEdit(item.translatedText); setEditingTranslation(true) }}
+            >{item.translatedText}</div>
+          )}
           {sourceUrl && <a className="detail-reopen" href={sourceUrl} target="_blank" rel="noreferrer">↗ Re-open in Google Translate</a>}
         </div>
         <div className="detail-field">
@@ -358,7 +410,24 @@ export function TranslationDetail({
             
             <div className="detail-field">
               <div className="detail-field-label">Original</div>
-              <div className="detail-field-value" style={{ fontSize: '16px' }}>{item.sourceText}</div>
+              {editingSource ? (
+                <textarea
+                  className="detail-note-input"
+                  autoFocus
+                  style={{ fontSize: '16px' }}
+                  value={sourceEdit}
+                  onChange={e => setSourceEdit(e.target.value)}
+                  onBlur={() => handleSaveEdits('sourceText', sourceEdit)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSaveEdits('sourceText', sourceEdit) }}
+                />
+              ) : (
+                <div
+                  className="detail-field-value"
+                  title="Click to edit"
+                  style={{ cursor: 'text', fontSize: '16px' }}
+                  onClick={() => { setSourceEdit(item.sourceText); setEditingSource(true) }}
+                >{item.sourceText}</div>
+              )}
               {item.metadata?.context && (
                 <div className="detail-context" style={{ marginTop: 8 }}>
                   <span className="detail-field-label" style={{ fontSize: 11 }}>Context</span>
@@ -368,7 +437,24 @@ export function TranslationDetail({
             </div>
             <div className="detail-field">
               <div className="detail-field-label">Translation</div>
-              <div className="detail-field-value translated" style={{ fontSize: '18px' }}>{item.translatedText}</div>
+              {editingTranslation ? (
+                <textarea
+                  className="detail-note-input"
+                  autoFocus
+                  style={{ fontSize: '18px' }}
+                  value={translationEdit}
+                  onChange={e => setTranslationEdit(e.target.value)}
+                  onBlur={() => handleSaveEdits('translatedText', translationEdit)}
+                  onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSaveEdits('translatedText', translationEdit) }}
+                />
+              ) : (
+                <div
+                  className="detail-field-value translated"
+                  title="Click to edit"
+                  style={{ cursor: 'text', fontSize: '18px' }}
+                  onClick={() => { setTranslationEdit(item.translatedText); setEditingTranslation(true) }}
+                >{item.translatedText}</div>
+              )}
               {sourceUrl && <a className="detail-reopen" href={sourceUrl} target="_blank" rel="noreferrer">↗ Re-open in Google Translate</a>}
             </div>
 

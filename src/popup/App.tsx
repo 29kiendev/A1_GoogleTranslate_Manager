@@ -492,6 +492,12 @@ export default function PopupApp() {
               </select>
             </div>
 
+            {sourceLang === 'auto' && translateResult && (
+              <div style={{ padding: '4px 12px', fontSize: 11, color: '#5f6368', background: '#f8f9fa', borderBottom: '1px solid #e8eaed' }}>
+                Detected: <strong>{translateResult.sourceLangLabel ?? translateResult.sourceLang ?? '?'}</strong>
+              </div>
+            )}
+
             {/* Source panel */}
             <div className="gt-source-panel">
               <textarea

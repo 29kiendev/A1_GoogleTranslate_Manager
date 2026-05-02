@@ -40,6 +40,7 @@ export default function DashboardApp() {
   const [tags, setTags] = useState<Tag[]>([])
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   const selectedIndex = items.findIndex(t => t.id === selectedId)
@@ -267,6 +268,16 @@ export default function DashboardApp() {
     loadSidebar()
   }
 
+  const handleBulkMove = async (folderId: string | null) => {
+    for (const id of selectedIds) {
+      await sendMessage({ type: 'MOVE_TRANSLATION', payload: { id, folderId } })
+    }
+    setItems(prev => prev.map(i => selectedIds.has(i.id) ? { ...i, folderId } : i))
+    setSelectedIds(new Set())
+    setBulkMoveOpen(false)
+    loadSidebar()
+  }
+
   const handleEmptyTrash = async () => {
     if (!confirm('Permanently delete all items in Trash? This cannot be undone.')) return
     await sendMessage({ type: 'EMPTY_TRASH' })
@@ -438,13 +449,34 @@ export default function DashboardApp() {
             <>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 {selectedIds.size > 0 && (
-                  <div className="bulk-bar">
-                    <span>{selectedIds.size} selected</span>
-                    {!isTrashActive && <button className="bulk-btn" onClick={handleBulkStar}>★ Star all</button>}
-                    {isTrashActive && <button className="bulk-btn" onClick={handleBulkRestore}>Restore selected</button>}
-                    <button className="bulk-btn" onClick={handleBulkDelete}>🗑️ {isTrashActive ? 'Delete permanently' : 'Delete all'}</button>
-                    <button className="bulk-btn" onClick={() => setSelectedIds(new Set())}>Clear</button>
-                  </div>
+                  <>
+                    <div className="bulk-bar">
+                      <span>{selectedIds.size} selected</span>
+                      {!isTrashActive && <button className="bulk-btn" onClick={handleBulkStar}>★ Star all</button>}
+                      {!isTrashActive && (
+                        <button className="bulk-btn" onClick={() => setBulkMoveOpen(true)}>📁 Move to…</button>
+                      )}
+                      {isTrashActive && <button className="bulk-btn" onClick={handleBulkRestore}>Restore selected</button>}
+                      <button className="bulk-btn" onClick={handleBulkDelete}>🗑️ {isTrashActive ? 'Delete permanently' : 'Delete all'}</button>
+                      <button className="bulk-btn" onClick={() => { setSelectedIds(new Set()); setBulkMoveOpen(false) }}>Clear</button>
+                    </div>
+                    {bulkMoveOpen && (
+                      <div style={{ padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>Move {selectedIds.size} item(s) to:</span>
+                        <select
+                          defaultValue=""
+                          style={{ padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 12 }}
+                          onChange={e => handleBulkMove(e.target.value || null)}
+                        >
+                          <option value="">Uncategorized (root)</option>
+                          {folders.map(f => (
+                            <option key={f.id} value={f.id}>{'  '.repeat(f.depth)}{f.name}</option>
+                          ))}
+                        </select>
+                        <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setBulkMoveOpen(false)}>Cancel</button>
+                      </div>
+                    )}
+                  </>
                 )}
                 <TranslationList
                   items={items}
