@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
           input: {
             background: resolve(__dirname, 'src/background/index.ts'),
             content: resolve(__dirname, 'src/content/index.ts'),
+            'content-fab': resolve(__dirname, 'src/content-fab/index.ts'),
           } as Record<string, string>,
           output: {
             entryFileNames: '[name].js',

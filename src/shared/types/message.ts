@@ -46,6 +46,17 @@ export type MessageType =
   | 'MOVE_FOLDER'
   | 'GET_USAGE_HINT'
   | 'GET_SMART_COLLECTION_COUNTS'
+  | 'OPEN_FAB_POPUP'
+  | 'DETACH_FAB_POPUP'
+  | 'FAB_HIDE_IFRAME'
+  | 'TEST_PROVIDER'
+  | 'CREATE_PHRASEBOOK'
+  | 'GET_PHRASEBOOKS'
+  | 'DELETE_PHRASEBOOK'
+  | 'ADD_TO_PHRASEBOOK'
+  | 'REMOVE_FROM_PHRASEBOOK'
+  | 'GET_PHRASEBOOK_ITEMS'
+  | 'REORDER_PHRASEBOOK_ITEM'
 
 export interface ExtensionMessage<TPayload = unknown> {
   type: MessageType

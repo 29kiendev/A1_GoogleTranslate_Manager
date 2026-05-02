@@ -4,13 +4,14 @@ import { SidebarFolderTree } from './components/SidebarFolderTree'
 import { TranslationList } from './components/TranslationList'
 import { TranslationDetail } from './components/TranslationDetail'
 import { sendMessage } from '../shared/services/messagingService'
+import { startOfWeek, formatDate } from '../shared/utils/date'
 import type { Translation, SearchTranslationsQuery, LangPairCount } from '../shared/types/translation'
 import type { Folder, FolderId } from '../shared/types/folder'
 import type { Tag } from '../shared/types/tag'
 import type { SmartCollection } from '../shared/types/smartCollection'
 import type { AppSettings } from '../shared/types/settings'
 
-type View = 'list' | 'review' | 'batch_import' | 'settings' | 'translate'
+type View = 'list' | 'review' | 'batch_import' | 'settings' | 'translate' | 'stats' | 'phrasebook'
 
 const PAGE_SIZE = 50
 
@@ -333,6 +334,8 @@ export default function DashboardApp() {
           )}
           <button className="btn btn-primary" onClick={() => setView('translate')}>+ Translate</button>
           <button className="btn" onClick={() => setView('batch_import')}>+ Batch Import</button>
+          <button className="btn" onClick={() => setView('stats')} title="Statistics">📊 Stats</button>
+          <button className="btn" onClick={() => setView('phrasebook')} title="Phrasebook">📚 Phrasebook</button>
           <button className="btn" onClick={() => handleExport('json')}>Export JSON</button>
           <button className="btn" onClick={() => handleExport('anki_tsv')}>Export Anki</button>
           <button className="btn" onClick={() => handleExport('markdown')}>Export MD</button>
@@ -380,6 +383,12 @@ export default function DashboardApp() {
           )}
           {view === 'settings' && (
             <SettingsView onClose={() => setView('list')} />
+          )}
+          {view === 'stats' && (
+            <StatsView langPairs={langPairs} dueCount={dueCount} />
+          )}
+          {view === 'phrasebook' && (
+            <PhrasebookView />
           )}
           {view === 'list' && (
             <>
@@ -847,6 +856,275 @@ function TranslateView({ folders, onDone }: { folders: Folder[]; onDone: () => v
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function StatsView({ langPairs, dueCount }: { langPairs: LangPairCount[], dueCount: number }) {
+  const [weeklyData, setWeeklyData] = useState<{ label: string, count: number }[]>([])
+  const [srsStats, setSrsStats] = useState<{ enrolled: number, due: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadStats() {
+      setLoading(true)
+      const eightWeeksAgo = startOfWeek(new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000))
+      const res = await sendMessage<{ items: Translation[], total: number }>({
+        type: 'SEARCH_TRANSLATIONS',
+        payload: { createdFrom: eightWeeksAgo, limit: 1000, sortBy: 'createdAt', sortDirection: 'asc' }
+      })
+      if (res?.ok && res.data) {
+        const weeks: Record<number, number> = {}
+        for (let i = 0; i < 8; i++) {
+          const w = startOfWeek(new Date(eightWeeksAgo + i * 7 * 24 * 60 * 60 * 1000))
+          weeks[w] = 0
+        }
+        res.data.items.forEach(item => {
+          const w = startOfWeek(new Date(item.createdAt))
+          if (weeks[w] !== undefined) weeks[w]++
+        })
+        setWeeklyData(Object.entries(weeks).map(([w, count]) => ({
+          label: formatDate(Number(w)),
+          count
+        })))
+      }
+      const srsRes = await sendMessage<{ total: number }>({
+        type: 'SEARCH_TRANSLATIONS',
+        payload: { srsEnabled: true, limit: 1 }
+      })
+      if (srsRes?.ok && srsRes.data) {
+        setSrsStats({ enrolled: srsRes.data.total, due: dueCount })
+      }
+      setLoading(false)
+    }
+    loadStats()
+  }, [dueCount])
+
+  if (loading) return <div className="list-empty">Loading stats…</div>
+
+  const maxWeekly = Math.max(...weeklyData.map(d => d.count), 1)
+  const topPairs = [...langPairs].sort((a, b) => b.count - a.count).slice(0, 10)
+  const maxPairs = Math.max(...topPairs.map(p => p.count), 1)
+
+  return (
+    <div className="stats-container">
+      <h2 style={{ marginBottom: 32 }}>Statistics</h2>
+      <section className="stats-section">
+        <h3>Saves per week (last 8 weeks)</h3>
+        <div className="stats-chart-v">
+          {weeklyData.map(d => (
+            <div key={d.label} className="stats-bar-col">
+              <div className="stats-bar-track-v">
+                <div className="stats-bar-fill-v" style={{ height: `${(d.count / maxWeekly) * 100}%` }}>
+                  {d.count > 0 && <span className="stats-bar-val">{d.count}</span>}
+                </div>
+              </div>
+              <div className="stats-bar-label-v">{d.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="stats-section">
+        <h3>Top language pairs</h3>
+        {topPairs.length > 0 ? (
+          <div className="stats-chart">
+            {topPairs.map(p => (
+              <div key={`${p.sourceLang}-${p.targetLang}`} className="stats-bar-row">
+                <div className="stats-bar-label">{p.sourceLang} → {p.targetLang} ({p.count})</div>
+                <div className="stats-bar-track">
+                  <div className="stats-bar-fill" style={{ width: `${(p.count / maxPairs) * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p style={{ color: 'var(--muted)', fontSize: 13 }}>No data yet</p>}
+      </section>
+      {srsStats && (
+        <section className="stats-section">
+          <h3>SRS retention</h3>
+          {srsStats.enrolled > 0 ? (
+            <div className="stats-bar-row">
+              <div className="stats-bar-label">
+                {srsStats.enrolled - srsStats.due} retained / {srsStats.enrolled} enrolled 
+                ({Math.round(((srsStats.enrolled - srsStats.due) / srsStats.enrolled) * 100)}%)
+              </div>
+              <div className="stats-bar-track">
+                <div className="stats-bar-fill" style={{ width: `${((srsStats.enrolled - srsStats.due) / srsStats.enrolled) * 100}%` }} />
+              </div>
+            </div>
+          ) : <p style={{ color: 'var(--muted)', fontSize: 13 }}>No items enrolled in SRS yet</p>}
+        </section>
+      )}
+    </div>
+  )
+}
+
+function PhrasebookView() {
+  const [phrasebooks, setPhrasebooks] = useState<any[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loadingItems, setLoadingItems] = useState(false)
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newName, setNewName] = useState('')
+
+  const loadPhrasebooks = useCallback(async () => {
+    setLoading(true)
+    const res = await sendMessage<any[]>({ type: 'GET_PHRASEBOOKS' })
+    if (res?.ok && res.data) setPhrasebooks(res.data)
+    setLoading(false)
+  }, [])
+
+  const loadItems = useCallback(async (id: string) => {
+    setLoadingItems(true)
+    const res = await sendMessage<any[]>({ type: 'GET_PHRASEBOOK_ITEMS', payload: { phrasebookId: id } })
+    if (res?.ok && res.data) {
+      const enriched = await Promise.all(res.data.map(async item => {
+        const tRes = await sendMessage<Translation>({ type: 'GET_TRANSLATION', payload: item.translationId })
+        return { ...item, translation: tRes?.ok ? tRes.data : null }
+      }))
+      setItems(enriched)
+    }
+    setLoadingItems(false)
+  }, [])
+
+  useEffect(() => {
+    loadPhrasebooks()
+  }, [loadPhrasebooks])
+
+  useEffect(() => {
+    if (selectedId) loadItems(selectedId)
+    else setItems([])
+  }, [selectedId, loadItems])
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return
+    const res = await sendMessage({ type: 'CREATE_PHRASEBOOK', payload: { name: newName.trim() } })
+    if (res?.ok) {
+      setNewName('')
+      setShowNewForm(false)
+      loadPhrasebooks()
+    }
+  }
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Delete phrasebook "${name}"? Items will not be deleted from vault.`)) return
+    await sendMessage({ type: 'DELETE_PHRASEBOOK', payload: { id } })
+    if (selectedId === id) setSelectedId(null)
+    loadPhrasebooks()
+  }
+
+  const handleRemoveItem = async (translationId: string) => {
+    if (!selectedId) return
+    await sendMessage({ type: 'REMOVE_FROM_PHRASEBOOK', payload: { phrasebookId: selectedId, translationId } })
+    loadItems(selectedId)
+  }
+
+  return (
+    <div style={{ flex: 1, display: 'flex', height: '100%', overflow: 'hidden' }}>
+      <div style={{ width: 260, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: '#f8f9fa' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: .5 }}>My Phrasebooks</h3>
+          <button className="btn-icon" onClick={() => setShowNewForm(true)} title="New phrasebook">+</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 0' }}>
+          {showNewForm && (
+            <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border)', marginBottom: 12 }}>
+              <input
+                autoFocus
+                style={{ width: '100%', padding: '6px 10px', border: '1px solid var(--blue)', borderRadius: 4, fontSize: 13, marginBottom: 8, outline: 'none' }}
+                placeholder="Name…"
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowNewForm(false) }}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={handleCreate}>Create</button>
+                <button className="btn" style={{ padding: '4px 10px', fontSize: 11 }} onClick={() => setShowNewForm(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+          {loading && <div style={{ padding: 20, fontSize: 12, color: 'var(--muted)' }}>Loading…</div>}
+          {!loading && phrasebooks.length === 0 && <div style={{ padding: 20, fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>No phrasebooks created</div>}
+          {phrasebooks.map(pb => (
+            <div
+              key={pb.id}
+              onClick={() => setSelectedId(pb.id)}
+              style={{
+                padding: '10px 20px',
+                cursor: 'pointer',
+                fontSize: 13,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: selectedId === pb.id ? 'var(--blue-light)' : 'transparent',
+                color: selectedId === pb.id ? 'var(--blue)' : 'inherit',
+                fontWeight: selectedId === pb.id ? 600 : 400
+              }}
+            >
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📚 {pb.name}</span>
+              <button
+                className="btn-icon"
+                style={{ opacity: selectedId === pb.id ? 1 : 0, fontSize: 14 }}
+                onClick={e => { e.stopPropagation(); handleDelete(pb.id, pb.name) }}
+              >
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', background: '#fff', padding: 32 }}>
+        {!selectedId ? (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+            <p>Select a phrasebook to view its items</p>
+          </div>
+        ) : (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 24, marginBottom: 4 }}>{phrasebooks.find(p => p.id === selectedId)?.name}</h2>
+              <p style={{ color: 'var(--muted)', fontSize: 13 }}>{items.length} items in this collection</p>
+            </div>
+            {loadingItems ? (
+              <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading items…</div>
+            ) : items.length === 0 ? (
+              <div style={{ color: 'var(--muted)', fontSize: 13, fontStyle: 'italic', marginTop: 40, textAlign: 'center' }}>
+                This phrasebook is empty. Add translations from the Vault.
+              </div>
+            ) : (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+                {items.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: '12px 20px',
+                      borderBottom: idx === items.length - 1 ? 'none' : '1px solid var(--border)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 20
+                    }}
+                  >
+                    <div style={{ width: 30, color: 'var(--muted)', fontSize: 11, fontWeight: 600 }}>{idx + 1}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.translation?.sourceText || 'Unknown'}
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--blue)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.translation?.translatedText || 'Unknown'}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                       <button className="btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleRemoveItem(item.translationId)}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

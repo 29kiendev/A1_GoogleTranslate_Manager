@@ -3,11 +3,15 @@ import { sendMessage } from '../shared/services/messagingService'
 import type { AppSettings } from '../shared/types/settings'
 import type { ProviderType } from '../shared/types/provider'
 import type { Folder } from '../shared/types/folder'
+import type { TranslateVaultExport } from '../shared/types/importExport'
 
 export default function OptionsApp() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saved, setSaved] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([])
+  const [testingProvider, setTestingProvider] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     sendMessage<AppSettings>({ type: 'GET_SETTINGS' }).then(r => {
@@ -18,12 +22,51 @@ export default function OptionsApp() {
     })
   }, [])
 
+  useEffect(() => {
+    setTestResult(null)
+  }, [settings?.provider.type])
+
   const update = async (patch: Partial<AppSettings>) => {
     const res = await sendMessage<AppSettings>({ type: 'UPDATE_SETTINGS', payload: patch })
     if (res?.ok && res.data) {
       setSettings(res.data)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+    }
+  }
+
+  const handleTestProvider = async () => {
+    setTestingProvider(true)
+    setTestResult(null)
+    const res = await sendMessage<{ result: string; latencyMs: number }>({ type: 'TEST_PROVIDER' })
+    setTestingProvider(false)
+    if (res?.ok && res.data) {
+      setTestResult({ ok: true, message: `✓ "${res.data.result}" (${res.data.latencyMs}ms)` })
+    } else {
+      setTestResult({ ok: false, message: `✗ ${res?.error?.message ?? 'Test failed'}` })
+    }
+  }
+
+  const handleDownloadBackup = async () => {
+    setDownloading(true)
+    try {
+      const res = await sendMessage<TranslateVaultExport>({ type: 'EXPORT_DATA', payload: { format: 'json' } })
+      if (res?.ok && res.data) {
+        const json = JSON.stringify(res.data, null, 2)
+        const blob = new Blob([json], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `translate-vault-backup-${new Date().toISOString().slice(0, 10)}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        alert('Export failed: ' + (res?.error?.message ?? 'Unknown error'))
+      }
+    } catch (err) {
+      alert('Export failed: ' + String(err))
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -152,6 +195,23 @@ export default function OptionsApp() {
             }}
           />
         </label>
+        <label className="options-row">
+          <span>Translation font scale</span>
+          <input
+            type="number"
+            className="options-number"
+            min={0.75}
+            max={2.0}
+            step={0.05}
+            value={settings.uiPreferences?.translateFontScale ?? 1.0}
+            onChange={e => {
+              const v = parseFloat(e.target.value)
+              if (!isNaN(v) && v >= 0.75 && v <= 2.0) {
+                update({ uiPreferences: { ...settings.uiPreferences, translateFontScale: v } })
+              }
+            }}
+          />
+        </label>
       </section>
 
       <section className="options-section">
@@ -225,14 +285,111 @@ export default function OptionsApp() {
             />
           </label>
         )}
+        <div className="options-row" style={{ marginTop: 16 }}>
+          <button
+            className="btn-primary"
+            onClick={handleTestProvider}
+            disabled={testingProvider}
+            style={{ padding: '6px 12px', fontSize: 12 }}
+          >
+            {testingProvider ? 'Testing…' : 'Test Provider'}
+          </button>
+          {testResult && (
+            <span style={{
+              marginLeft: 12,
+              fontSize: 12,
+              color: testResult.ok ? '#188038' : '#d93025',
+              fontWeight: 500
+            }}>
+              {testResult.message}
+            </span>
+          )}
+        </div>
+      </section>
+
+      <section className="options-section">
+        <h2>Floating Action Button (FAB)</h2>
+        <label className="options-row">
+          <span>Enable FAB on all websites</span>
+          <input
+            type="checkbox"
+            checked={settings.fab.enabled}
+            onChange={async e => {
+              if (e.target.checked) {
+                const granted = await chrome.permissions.request({
+                  origins: ['<all_urls>'],
+                })
+                if (granted) {
+                  update({ fab: { ...settings.fab, enabled: true } })
+                }
+              } else {
+                update({ fab: { ...settings.fab, enabled: false } })
+              }
+            }}
+          />
+        </label>
+        <p className="options-help-text" style={{ fontSize: 11, color: '#5f6368', marginTop: -8, marginBottom: 12 }}>
+          Requires permission to access all websites.
+        </p>
+        <label className="options-row">
+          <span>Auto-hide when not in use</span>
+          <input
+            type="checkbox"
+            checked={settings.fab.autoHide}
+            onChange={e => update({ fab: { ...settings.fab, autoHide: e.target.checked } })}
+          />
+        </label>
+        <label className="options-row">
+          <span>Open mode</span>
+          <select
+            value={settings.fab.openMode}
+            onChange={e => update({ fab: { ...settings.fab, openMode: e.target.value as 'inline' | 'window' } })}
+          >
+            <option value="inline">Inline on page (overlay)</option>
+            <option value="window">Separate popup window</option>
+          </select>
+        </label>
+        <label className="options-row">
+          <span>Default side</span>
+          <select
+            value={settings.fab.position.side}
+            onChange={e =>
+              update({
+                fab: {
+                  ...settings.fab,
+                  position: { ...settings.fab.position, side: e.target.value as 'left' | 'right' },
+                },
+              })
+            }
+          >
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
+        <label className="options-row">
+          <span>Global position (same for all sites)</span>
+          <input
+            type="checkbox"
+            checked={settings.fab.globalPosition}
+            onChange={e => update({ fab: { ...settings.fab, globalPosition: e.target.checked } })}
+          />
+        </label>
       </section>
 
       <section className="options-section">
         <h2>About</h2>
         <p className="options-about">
-          A1 – Google Translate Manager v1.0.0<br />
+          A1 – Google Translate Manager v2.0.0<br />
           All data is stored locally. No external servers.
         </p>
+        <button
+          className="btn"
+          disabled={downloading}
+          onClick={handleDownloadBackup}
+          style={{ marginTop: 12, padding: '6px 16px' }}
+        >
+          {downloading ? 'Preparing backup…' : 'Download JSON backup'}
+        </button>
       </section>
     </div>
   )

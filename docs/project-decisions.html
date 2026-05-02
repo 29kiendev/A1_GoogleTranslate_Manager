@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Translate Vault — Project Decisions & Architecture Notes</title>
+<style>
+  :root {
+    --blue: #1a73e8;
+    --light-blue: #e8f0fe;
+    --green: #34a853;
+    --light-green: #e6f4ea;
+    --red: #d93025;
+    --light-red: #fce8e6;
+    --yellow: #f9ab00;
+    --light-yellow: #fef7e0;
+    --gray: #5f6368;
+    --border: #e8eaed;
+    --text: #202124;
+    --bg: #fff;
+    --section-bg: #f8f9fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Google Sans', Roboto, system-ui, sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: #f1f3f4;
+    line-height: 1.6;
+  }
+  .page { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Header */
+  .doc-header {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+  }
+  .doc-header h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  .doc-header h1 span { color: var(--blue); }
+  .meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+  .meta-item { font-size: 12px; color: var(--gray); background: var(--section-bg); padding: 4px 10px; border-radius: 12px; }
+
+  /* Section */
+  .section {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+  }
+  .section h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section h3 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; color: var(--blue); }
+  .section h4 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; color: var(--gray); }
+  p { margin-bottom: 10px; }
+  ul, ol { padding-left: 20px; margin-bottom: 10px; }
+  li { margin-bottom: 4px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th { background: var(--section-bg); font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid var(--border); }
+  td { padding: 7px 12px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  /* Code */
+  code { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; background: var(--section-bg); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); }
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 16px 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 12px 0;
+  }
+  pre .kw { color: #cba6f7; }
+  pre .str { color: #a6e3a1; }
+  pre .cmt { color: #6c7086; }
+  pre .num { color: #fab387; }
+
+  /* Badges */
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+  .badge-blue { background: var(--light-blue); color: var(--blue); }
+  .badge-green { background: var(--light-green); color: var(--green); }
+  .badge-red { background: var(--light-red); color: var(--red); }
+  .badge-yellow { background: var(--light-yellow); color: #b06000; }
+  .badge-gray { background: var(--section-bg); color: var(--gray); }
+
+  /* Cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin: 12px 0; }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    background: var(--section-bg);
+  }
+  .card-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+  .card-body { font-size: 12px; color: var(--gray); line-height: 1.5; }
+
+  /* Alert */
+  .alert { border-radius: 8px; padding: 12px 16px; margin: 12px 0; font-size: 13px; }
+  .alert-blue { background: var(--light-blue); border-left: 4px solid var(--blue); color: #1a1a2e; }
+  .alert-green { background: var(--light-green); border-left: 4px solid var(--green); color: #1a2e1a; }
+  .alert-yellow { background: var(--light-yellow); border-left: 4px solid var(--yellow); color: #2e1a00; }
+
+  /* Session list */
+  .session-list { counter-reset: session; }
+  .session-item {
+    display: flex;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+  }
+  .session-item:last-child { border-bottom: none; }
+  .session-num {
+    width: 32px;
+    height: 32px;
+    background: var(--blue);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .session-content { flex: 1; }
+  .session-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .session-desc { font-size: 12px; color: var(--gray); }
+  .session-tags { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+
+  /* TOC */
+  .toc { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; }
+  .toc a { color: var(--text); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .toc a:before { content: '→'; color: var(--blue); font-size: 11px; }
+  .toc a:hover { color: var(--blue); }
+
+  /* Roles */
+  .roles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+  .role-card { border-radius: 8px; padding: 16px; border: 2px solid var(--border); }
+  .role-card.pm { border-color: var(--green); background: var(--light-green); }
+  .role-card.dev { border-color: var(--blue); background: var(--light-blue); }
+  .role-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .role-card.pm .role-title { color: var(--green); }
+  .role-card.dev .role-title { color: var(--blue); }
+  .role-card ul { font-size: 12px; }
+
+  /* Workflow */
+  .workflow { display: flex; flex-direction: column; gap: 0; }
+  .workflow-step { display: flex; gap: 16px; padding: 12px 0; position: relative; }
+  .workflow-step:not(:last-child):before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 40px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--light-blue);
+    border: 2px solid var(--blue);
+    color: var(--blue);
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff; }
+    .page { padding: 0; }
+    .section, .doc-header { border: 1px solid #ddd; break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="doc-header">
+    <h1>A1 – Google Translate Manager &nbsp;<span>(Translate Vault)</span></h1>
+    <p style="color:var(--gray); margin-top:4px;">Project Decisions, Architecture Notes &amp; v2 Roadmap — Session Reference</p>
+    <div class="meta">
+      <span class="meta-item">📅 Created: 2026-05-01</span>
+      <span class="meta-item">🔖 Version: v1.0.0 shipped → v2 in progress</span>
+      <span class="meta-item">🔗 github.com/29kiendev/A1_GoogleTranslate_Manager</span>
+      <span class="meta-item">📁 D:\Work\_Code\opera_plugin\A1_GoogleTranslate_Manager\gemini\translate-vault</span>
+    </div>
+
+    <div style="margin-top:20px;">
+      <strong style="font-size:13px; color:var(--gray);">CONTENTS</strong>
+      <div class="toc" style="margin-top:10px;">
+        <a href="#s1">1. Project Overview</a>
+        <a href="#s2">2. v1.0.0 Features Built</a>
+        <a href="#s3">3. Roles &amp; Workflow</a>
+        <a href="#s4">4. v2 Requirements (8 user requests)</a>
+        <a href="#s5">5. FAB Technique Decision</a>
+        <a href="#s6">6. v2 Session Plan (10 sessions)</a>
+        <a href="#s7">7. Key Files Reference</a>
+        <a href="#s8">8. Session Start Command</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. Project Overview -->
+  <div class="section" id="s1">
+    <h2>1. Project Overview</h2>
+    <p>An Opera/Chrome browser extension (Manifest V3) for capturing, organizing, and reviewing Google Translate translations. All data is stored locally in IndexedDB — no accounts, no servers.</p>
+
+    <div class="card-grid" style="margin-top:16px;">
+      <div class="card">
+        <div class="card-title">Tech Stack</div>
+        <div class="card-body">TypeScript ~6.0 (strict) · React 19 · Vite 8 · idb v8 (IndexedDB) · Shadow DOM</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Architecture</div>
+        <div class="card-body">MV3 service worker · Message-passing bus (40+ types) · Repository pattern · Provider abstraction</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Key Constraint</div>
+        <div class="card-body">Local-first forever. No cloud sync. All data in IndexedDB / chrome.storage.local.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Build</div>
+        <div class="card-body"><code>npm run build</code> (two-pass Vite) · <code>npm run typecheck</code> must return 0 errors</div>
+      </div>
+    </div>
+
+    <h3>Key Documents (always keep these updated)</h3>
+    <table>
+      <tr><th>File</th><th>Purpose</th></tr>
+      <tr><td><code>V2_PLAN.md</code></td><td>Complete AI handoff document — architecture + 10-session v2 plan + session start command</td></tr>
+      <tr><td><code>PROJECT_ARCHITECTURE.md</code></td><td>Hard rules, completed session history, constraints. Developer AI must update §12 after each session.</td></tr>
+      <tr><td><code>README.md</code></td><td>GitHub public documentation</td></tr>
+    </table>
+  </div>
+
+  <!-- 2. v1.0.0 -->
+  <div class="section" id="s2">
+    <h2>2. v1.0.0 — What Is Already Built</h2>
+    <p>Tag <code>v1.0.0</code> pushed to GitHub on 2026-05-01. All features below are complete — do not re-implement.</p>
+    <table>
+      <tr><th>Category</th><th>What's built</th></tr>
+      <tr><td>Capture</td><td>Content script on translate.google.com; manual/auto/off modes; Shadow DOM toolbar; Alt+Shift+S shortcut; confirmation; privacy mask</td></tr>
+      <tr><td>Storage</td><td>IndexedDB (4 stores); SHA-256 deduplication with policy; soft-delete/trash/restore/hard-delete</td></tr>
+      <tr><td>Folders</td><td>Unlimited nesting; pathCache; create/rename/move/delete (3 cascade modes); counts</td></tr>
+      <tr><td>Tags</td><td>Create with color; attach/remove; colored dots in list</td></tr>
+      <tr><td>Search</td><td>Full-text search; filter by folder/star/lang/tag/date; sorting; pagination</td></tr>
+      <tr><td>SRS</td><td>SM-2 algorithm; auto-enroll; daily limit; streak tracking; AI usage hints</td></tr>
+      <tr><td>Import/Export</td><td>JSON full backup; Anki TSV; Markdown; batch import; import with merge strategies</td></tr>
+      <tr><td>Smart Collections</td><td>Due Review, Never Reviewed, This Week, Most Used, Starred, All, Trash (with live counts)</td></tr>
+      <tr><td>Dashboard</td><td>List + multi-select + bulk ops; detail sidebar; review view; batch import; translate view; settings view</td></tr>
+      <tr><td>Popup</td><td>GT-style UI: language selects (110 langs), swap, detect language, source/result panels, bottom nav, keyboard nav in history</td></tr>
+      <tr><td>Options</td><td>All settings; Translation Provider section (type + conditional endpoint/API key)</td></tr>
+      <tr><td>Providers</td><td>Google Translate Web (default, free, no key), LibreTranslate, DeepL, CustomHTTP, Mock</td></tr>
+    </table>
+  </div>
+
+  <!-- 3. Roles & Workflow -->
+  <div class="section" id="s3">
+    <h2>3. Roles &amp; Workflow</h2>
+
+    <div class="roles">
+      <div class="role-card pm">
+        <div class="role-title">👤 Project Manager (You)</div>
+        <ul>
+          <li>Define features in natural language</li>
+          <li>Give developer AI the session start command</li>
+          <li>Collect developer AI's report after each session</li>
+          <li>Paste report + build output + git diff here for review</li>
+          <li>Convey correction instructions to developer AI</li>
+          <li>Approve sessions and proceed to next</li>
+        </ul>
+      </div>
+      <div class="role-card dev">
+        <div class="role-title">🤖 Lead Architect (Claude)</div>
+        <ul>
+          <li>Review all code changes via git diff</li>
+          <li>Check for architectural violations</li>
+          <li>Verify implementation matches V2_PLAN.md spec</li>
+          <li>Issue ✅ Approved / ⚠️ Notes / ❌ Rejected verdict</li>
+          <li>Write exact correction instructions when needed</li>
+          <li>Update architecture docs and memory</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="alert alert-yellow" style="margin-top:8px;">
+      <strong>Developer AI role:</strong> Implements sessions. Reads V2_PLAN.md + PROJECT_ARCHITECTURE.md at session start. Must run <code>npm run typecheck &amp;&amp; npm run build</code> after every change. Updates PROJECT_ARCHITECTURE.md §12 when done.
+    </div>
+
+    <h3>The Review Loop</h3>
+    <div class="workflow">
+      <div class="workflow-step"><div class="step-num">1</div><div><strong>You → Developer AI:</strong> Paste session start command from V2_PLAN.md §12 (replace [N] with session number)</div></div>
+      <div class="workflow-step"><div class="step-num">2</div><div><strong>Developer AI works:</strong> Reads docs, implements session, runs build check, produces report</div></div>
+      <div class="workflow-step"><div class="step-num">3</div><div><strong>You collect 3 things:</strong> Developer AI's report · build output · run <code>git diff HEAD~1 --stat</code> and copy result</div></div>
+      <div class="workflow-step"><div class="step-num">4</div><div><strong>You → Claude (here):</strong> Paste all three items and say "Session N complete, please review"</div></div>
+      <div class="workflow-step"><div class="step-num">5</div><div><strong>Claude reviews:</strong> Reads git diff, checks against spec, issues verdict</div></div>
+      <div class="workflow-step"><div class="step-num">6</div><div><strong>If ✅:</strong> Proceed to next session. <strong>If ❌:</strong> Claude writes fix instructions → you paste to developer AI → repeat from step 2</div></div>
+    </div>
+
+    <h3>What to Paste Here for Each Review</h3>
+    <table>
+      <tr><th>Item</th><th>How to get it</th></tr>
+      <tr><td>Developer AI's session report</td><td>Copy its final output (it should follow the structured format)</td></tr>
+      <tr><td>Build output</td><td>Copy output of <code>npm run typecheck &amp;&amp; npm run build</code></td></tr>
+      <tr><td>Git diff summary</td><td>Run: <code>git diff HEAD~1 --stat</code> in the project folder</td></tr>
+    </table>
+  </div>
+
+  <!-- 4. v2 Requirements -->
+  <div class="section" id="s4">
+    <h2>4. v2 Requirements — 8 User Requests (Evaluated)</h2>
+    <p>All 8 approved. Feature 6 (image/document/website translation) was removed.</p>
+
+    <table>
+      <tr>
+        <th>#</th>
+        <th>Requirement</th>
+        <th>Status</th>
+        <th>Key Decision</th>
+        <th>Session</th>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td>Pin the popup window</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td>Pin icon in header → <code>chrome.windows.create({ type:'popup' })</code> opens persistent detached window. Closes current popup.</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>FAB on all browsers (auto-hide / always-show)</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td><code>&lt;all_urls&gt;</code> as <strong>optional permission</strong> (opt-in from Settings — avoids install warning). Tab Master technique for button. <code>chrome.windows.create()</code> for panel.</td>
+        <td>1 + 2</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Popup: Save, Copy Original, Copy Translation, Open, Vault + zoom/font size</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td>Action buttons in result panel footer. Zoom +/− buttons adjust CSS <code>--font-scale</code>, persisted in settings.</td>
+        <td>3</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Auto-translate on paste, remove Translate button</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td><code>onPaste</code> event → 300ms debounce → auto-translate. Keep small ↻ re-translate icon (shows only when text edited after result exists).</td>
+        <td>3</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>FAB → translate tab; popup → history tab</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td>URL param <code>?source=fab</code> forces translate tab. Normal popup icon uses <code>popupDefaultView</code> setting (currently defaults to history).</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>Image / document / website translation</td>
+        <td><span class="badge badge-red">❌ Removed</span></td>
+        <td>Removed from scope. Image needs OCR API. Documents need paid APIs. Website via Google proxy is trivial but low value.</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Popup history: tree-like folder structure</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td>Add toggle: list view (current) ↔ tree view (new). Tree groups translations by folderId. "Unsorted" node for null. Collapsible.</td>
+        <td>4</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Dashboard detail panel UX improvement</td>
+        <td><span class="badge badge-green">✅ Approved</span></td>
+        <td>Keep sidebar panel for quick glances. Add ⤢ expand button → opens centered modal (80% viewport width) for long content. Escape closes.</td>
+        <td>5</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 5. FAB Technique -->
+  <div class="section" id="s5">
+    <h2>5. FAB Technique Decision</h2>
+
+    <h3>Reference Project</h3>
+    <p>Study <code>D:\Work\_Code\opera_plugin\A1_Tab_Master\content.js</code> (lines 1–200) for the button implementation pattern.</p>
+
+    <h3>Comparison</h3>
+    <table>
+      <tr><th>Aspect</th><th>Tab Master Technique</th><th>Our Decision</th></tr>
+      <tr><td>Button injection</td><td>Direct DOM, IIFE wrapper, inline styles</td><td>✅ Use same technique</td></tr>
+      <tr><td>Style isolation</td><td>No Shadow DOM — IIFE + inline styles prevent leaks</td><td>✅ Same</td></tr>
+      <tr><td>Zoom handling</td><td><code>zoom: 1/currentZoom</code> on wrapper</td><td>✅ Use same</td></tr>
+      <tr><td>Positioning</td><td>Fixed, draggable, per-domain persistence</td><td>✅ Use same</td></tr>
+      <tr><td>Glass effect</td><td>backdrop-filter blur + rgba + max z-index</td><td>✅ Use same</td></tr>
+      <tr><td>Auto-hide</td><td>CSS opacity + pointer-events + hover</td><td>✅ Use same</td></tr>
+      <tr><td>Click action</td><td>In-page commands (Tab Master specific)</td><td>❌ Different — opens popup window via background</td></tr>
+      <tr><td>Panel/UI</td><td>N/A (in-page only)</td><td>✅ <code>chrome.windows.create(popup.html?source=fab)</code></td></tr>
+    </table>
+
+    <div class="alert alert-blue">
+      <strong>Final decision:</strong> Tab Master's button technique + <code>chrome.windows.create()</code> for the translate panel. The existing popup code (React, all tabs, all logic) is fully reused — no duplication.
+    </div>
+
+    <h3>FAB Glass Button Style (inline CSS to inject)</h3>
+    <pre>background: rgba(26, 115, 232, 0.88);
+backdrop-filter: blur(12px);
+-webkit-backdrop-filter: blur(12px);
+border: 1px solid rgba(255, 255, 255, 0.3);
+box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+border-radius: 50%;
+width: 52px; height: 52px;
+position: fixed;
+z-index: 2147483647;
+cursor: pointer;
+transition: opacity 0.3s ease, transform 0.2s ease;</pre>
+
+    <h3>Permission Strategy</h3>
+    <ul>
+      <li><code>&lt;all_urls&gt;</code> declared as <strong>optional_permissions + optional_host_permissions</strong> in manifest (already done)</li>
+      <li><code>scripting</code> added to required permissions (already done)</li>
+      <li>FAB is <strong>OFF by default</strong> — user enables in Options</li>
+      <li>Enabling triggers <code>chrome.permissions.request()</code> → if granted, injects content script dynamically</li>
+      <li>No scary permission warning at install time</li>
+    </ul>
+
+    <h3>Manifest Changes (already applied)</h3>
+    <pre>{
+  <span class="str">"permissions"</span>: [<span class="str">"storage"</span>, <span class="str">"unlimitedStorage"</span>, <span class="str">"clipboardWrite"</span>, <span class="str">"scripting"</span>],
+  <span class="str">"optional_permissions"</span>: [<span class="str">"&lt;all_urls&gt;"</span>],
+  <span class="str">"optional_host_permissions"</span>: [<span class="str">"&lt;all_urls&gt;"</span>]
+}</pre>
+  </div>
+
+  <!-- 6. Session Plan -->
+  <div class="section" id="s6">
+    <h2>6. v2 Session Plan — 10 Sessions</h2>
+    <p>Sessions 1–5 implement user requests. Sessions 6–10 implement developer suggestions.</p>
+
+    <div class="session-list">
+      <div class="session-item">
+        <div class="session-num">1</div>
+        <div class="session-content">
+          <div class="session-title">FAB Foundation + Pin Popup</div>
+          <div class="session-desc">Create <code>src/content-fab/index.ts</code> (Tab Master style button). Handle <code>OPEN_FAB_POPUP</code> in background → <code>chrome.windows.create()</code>. Add pin button in popup header. Detect <code>?source=fab</code> URL param for tab default. Add FAB settings block. Options: FAB enable toggle with permission request.</div>
+          <div class="session-tags">
+            <span class="badge badge-blue">req-1: Pin</span>
+            <span class="badge badge-blue">req-2: FAB</span>
+            <span class="badge badge-blue">req-5: Tab defaults</span>
+          </div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">2</div>
+        <div class="session-content">
+          <div class="session-title">FAB UX Polish</div>
+          <div class="session-desc">Draggable FAB with position persistence (global + per-domain). Zoom-aware positioning. Always-show mode. Glass effect refinement. Options: position side (left/right), global vs per-domain toggle.</div>
+          <div class="session-tags"><span class="badge badge-blue">req-2: FAB polish</span></div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">3</div>
+        <div class="session-content">
+          <div class="session-title">Auto-translate on Paste + Action Buttons + Zoom</div>
+          <div class="session-desc">Remove Translate button. Add <code>onPaste</code> auto-translate (300ms debounce). Add ↻ re-translate icon. Result panel: Save (with folder picker), Copy Original, Copy Translation, Open in GT. Font zoom +/− buttons (CSS scale factor, persisted in settings).</div>
+          <div class="session-tags">
+            <span class="badge badge-blue">req-3: Action buttons</span>
+            <span class="badge badge-blue">req-4: Auto-translate</span>
+          </div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">4</div>
+        <div class="session-content">
+          <div class="session-title">Popup History Folder Tree</div>
+          <div class="session-desc">Add list/tree view toggle in history tab. Tree mode: load all folders + group translations by folderId. Collapsible folder nodes with counts. "Unsorted" root node for null folderId.</div>
+          <div class="session-tags"><span class="badge badge-blue">req-7: Folder tree</span></div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">5</div>
+        <div class="session-content">
+          <div class="session-title">Dashboard Detail Panel UX</div>
+          <div class="session-desc">Add ⤢ expand button in TranslationDetail header. Opens centered modal (80% viewport width, 85vh height). Full edit controls in modal. Escape key + click-outside closes.</div>
+          <div class="session-tags"><span class="badge badge-blue">req-8: Detail UX</span></div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">6</div>
+        <div class="session-content">
+          <div class="session-title">Quick Language Pins + Copy Shortcut + Open in GT</div>
+          <div class="session-desc">Store last 3 language pairs in settings. Show as quick-pick chips above language bar. Ctrl+C shortcut copies result when visible. Verify Open in GT button (from Session 3).</div>
+          <div class="session-tags">
+            <span class="badge badge-gray">suggest #2: Language pins</span>
+            <span class="badge badge-gray">suggest #3: Copy shortcut</span>
+            <span class="badge badge-gray">suggest #4: Open in GT</span>
+          </div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">7</div>
+        <div class="session-content">
+          <div class="session-title">Folder Selector in Result + Provider Health Check</div>
+          <div class="session-desc">Polish folder selector in translate result panel (from Session 3). Add "Test Provider" button in Options → sends test string, shows latency + result. Add <code>TEST_PROVIDER</code> message type + handler.</div>
+          <div class="session-tags">
+            <span class="badge badge-gray">suggest #1: Folder selector</span>
+            <span class="badge badge-gray">suggest #9: Health check</span>
+          </div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">8</div>
+        <div class="session-content">
+          <div class="session-title">Statistics Dashboard</div>
+          <div class="session-desc">New "Stats" view in dashboard. CSS/SVG charts: saves per week (bar), language pair distribution (horizontal bars), SRS retention %. All from local IndexedDB — no external APIs.</div>
+          <div class="session-tags"><span class="badge badge-gray">suggest #10: Stats</span></div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">9</div>
+        <div class="session-content">
+          <div class="session-title">Mobile-Friendly Popup + Phrasebook Mode</div>
+          <div class="session-desc">Responsive popup layout (works at 320px for Opera Android). Phrasebook: new DB stores, ordered study sets, create/edit/delete, add translations, CRUD interface in dashboard.</div>
+          <div class="session-tags">
+            <span class="badge badge-gray">suggest #8: Mobile</span>
+            <span class="badge badge-gray">suggest #6: Phrasebook</span>
+          </div>
+        </div>
+      </div>
+      <div class="session-item">
+        <div class="session-num">10</div>
+        <div class="session-content">
+          <div class="session-title">Context Capture + Scheduled Export + Polish</div>
+          <div class="session-desc">Content script captures surrounding sentence as <code>metadata.context</code>. Show context in TranslationDetail. "Download JSON backup" button in Options. Final polish pass on all sessions.</div>
+          <div class="session-tags">
+            <span class="badge badge-gray">suggest #7: Context</span>
+            <span class="badge badge-gray">suggest #5: Export</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Key Files -->
+  <div class="section" id="s7">
+    <h2>7. Key Files Reference</h2>
+    <table>
+      <tr><th>File</th><th>Role</th></tr>
+      <tr><td><code>public/manifest.json</code></td><td>Extension manifest — source of truth for permissions</td></tr>
+      <tr><td><code>vite.config.ts</code></td><td>Two-pass build. Add new scripts here (content-fab, etc.)</td></tr>
+      <tr><td><code>src/shared/types/settings.ts</code></td><td>AppSettings interface + DEFAULT_SETTINGS. Add new settings here first.</td></tr>
+      <tr><td><code>src/shared/types/message.ts</code></td><td>MessageType union. Add new message types here.</td></tr>
+      <tr><td><code>src/background/index.ts</code></td><td>Special messages (OPEN_DASHBOARD, OPEN_FAB_POPUP) handled directly here</td></tr>
+      <tr><td><code>src/background/messageRouter.ts</code></td><td>Routes all other messages to handlers</td></tr>
+      <tr><td><code>src/content-fab/index.ts</code></td><td>FAB content script (NEW — Session 1)</td></tr>
+      <tr><td><code>src/popup/App.tsx</code></td><td>Main popup UI (GT-style). Read URL param <code>?source=fab</code> for tab default.</td></tr>
+      <tr><td><code>src/dashboard/components/TranslationDetail.tsx</code></td><td>Right panel. Add expand-to-modal in Session 5.</td></tr>
+      <tr><td><code>src/content/dom/selectors.ts</code></td><td>All CSS selectors for GT DOM. Update here if Google changes their page.</td></tr>
+    </table>
+
+    <h3>Hard Rules (never break)</h3>
+    <ul>
+      <li><code>npm run typecheck</code> must return <strong>0 errors</strong> after every session</li>
+      <li>No constructor parameter properties — TypeScript flag <code>erasableSyntaxOnly</code> forbids them</li>
+      <li><code>boolean</code> cannot be an IndexedDB index — use <code>0</code>/<code>1</code></li>
+      <li><code>'auto'</code> language code stored as <code>null</code> in DB, never as string <code>'auto'</code></li>
+      <li>Never call translation APIs from UI code — always through background message bus</li>
+      <li>Local-first forever — no cloud sync</li>
+    </ul>
+  </div>
+
+  <!-- 8. Session Start Command -->
+  <div class="section" id="s8">
+    <h2>8. Session Start Command</h2>
+    <p>Copy-paste this to the developer AI at the start of each session. Replace <strong>[N]</strong> with the session number.</p>
+
+    <pre>You are a TypeScript/React developer working on the A1 Google Translate Manager
+browser extension (Translate Vault).
+
+Read these two files completely before touching any code:
+
+1. D:\Work\_Code\opera_plugin\A1_GoogleTranslate_Manager\gemini\translate-vault\V2_PLAN.md
+   → Your complete briefing: architecture reference, type definitions, and session task list
+
+2. D:\Work\_Code\opera_plugin\A1_GoogleTranslate_Manager\gemini\translate-vault\PROJECT_ARCHITECTURE.md
+   → Hard rules, completed session history, constraints that must never be broken
+
+Your task: Execute SESSION [N] as described in V2_PLAN.md.
+
+After every file change, verify the build stays clean:
+  cd "D:\Work\_Code\opera_plugin\A1_GoogleTranslate_Manager\gemini\translate-vault"
+  npm run typecheck && npm run build
+Both must exit with 0 errors.
+
+When SESSION [N] is complete:
+1. Run the session's test checklist from V2_PLAN.md §SESSION [N] — Tests
+2. Update PROJECT_ARCHITECTURE.md §12 with "Session 1[N]: [one-line description]"
+3. Update PROJECT_ARCHITECTURE.md §13 if you found new gaps
+4. Report in this format:
+   ## Session [N] Report
+   ### Files changed: (list each + one-line description)
+   ### Deviations from V2_PLAN.md: (none, or explain)
+   ### Build output: (paste full npm run typecheck && npm run build output)
+   ### Test checklist: (copy checklist from V2_PLAN.md, mark each ✅ or ❌)
+
+Hard rules:
+- TypeScript strict + erasableSyntaxOnly: no constructor parameter properties
+- boolean cannot be IndexedDB index: use 0/1
+- 'auto' sourceLang stored as null in DB
+- Never call translation APIs from UI: always through background message bus
+- No new .md files: update PROJECT_ARCHITECTURE.md only</pre>
+
+    <div class="alert alert-blue" style="margin-top:16px;">
+      <strong>For Session 1 only — add this line at the end:</strong><br>
+      Reference project for FAB technique: <code>D:\Work\_Code\opera_plugin\A1_Tab_Master\content.js</code> — read lines 1–200 for IIFE wrapper, zoom correction, glass effect CSS, drag logic. Apply that button technique in <code>src/content-fab/index.ts</code>.
+    </div>
+
+    <h3>What to bring to Claude for review (after each session)</h3>
+    <ol>
+      <li>The developer AI's session report (the structured output above)</li>
+      <li>Output of: <code>npm run typecheck &amp;&amp; npm run build</code></li>
+      <li>Output of: <code>git diff HEAD~1 --stat</code></li>
+      <li>Tell Claude: <em>"Session N complete, please review"</em></li>
+    </ol>
+  </div>
+
+  <div style="text-align:center; color:var(--gray); font-size:12px; padding: 24px 0;">
+    Generated 2026-05-01 · Translate Vault v2 Planning · github.com/29kiendev/A1_GoogleTranslate_Manager
+  </div>
+
+</div>
+</body>
+</html>

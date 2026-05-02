@@ -38,7 +38,16 @@ import {
 import { handleBatchSaveTranslations } from './handlers/batchHandlers'
 import { handleExportData, handleImportData } from './handlers/importExportHandlers'
 import { handleGetSettings, handleUpdateSettings } from './handlers/settingsHandlers'
-import { handleTranslateText, handleGetUsageHint } from './handlers/providerHandlers'
+import { handleTranslateText, handleGetUsageHint, handleTestProvider } from './handlers/providerHandlers'
+import {
+  handleCreatePhrasebook,
+  handleGetPhrasebooks,
+  handleDeletePhrasebook,
+  handleAddToPhrasebook,
+  handleRemoveFromPhrasebook,
+  handleGetPhrasebookItems,
+  handleReorderPhrasebookItem,
+} from './handlers/phrasebookHandlers'
 import type { ExtensionMessage, ExtensionResponse } from '../shared/types/message'
 
 export async function routeMessage(message: ExtensionMessage): Promise<ExtensionResponse> {
@@ -121,6 +130,23 @@ export async function routeMessage(message: ExtensionMessage): Promise<Extension
       return handleTranslateText(message.payload as any)
     case 'GET_USAGE_HINT':
       return handleGetUsageHint(message.payload as any)
+    case 'TEST_PROVIDER':
+      return handleTestProvider()
+
+    case 'CREATE_PHRASEBOOK':
+      return handleCreatePhrasebook(message.payload as any)
+    case 'GET_PHRASEBOOKS':
+      return handleGetPhrasebooks()
+    case 'DELETE_PHRASEBOOK':
+      return handleDeletePhrasebook(message.payload as any)
+    case 'ADD_TO_PHRASEBOOK':
+      return handleAddToPhrasebook(message.payload as any)
+    case 'REMOVE_FROM_PHRASEBOOK':
+      return handleRemoveFromPhrasebook(message.payload as any)
+    case 'GET_PHRASEBOOK_ITEMS':
+      return handleGetPhrasebookItems(message.payload as any)
+    case 'REORDER_PHRASEBOOK_ITEM':
+      return handleReorderPhrasebookItem(message.payload as any)
 
     default:
       return { ok: false, error: { code: 'VALIDATION_ERROR', message: `Unknown message type: ${message.type}` } }

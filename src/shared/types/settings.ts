@@ -30,6 +30,21 @@ export interface AppSettings {
     apiKey: string
     endpoint: string
   }
+  fab: {
+    enabled: boolean
+    autoHide: boolean
+    openMode: 'inline' | 'window'
+    position: {
+      side: 'right' | 'left'
+      offsetX: number
+      offsetY: number
+    }
+    globalPosition: boolean
+  }
+  uiPreferences: {
+    translateFontScale: number
+    recentLanguagePairs: Array<{ sourceLang: string; targetLang: string }>
+  }
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -60,5 +75,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
     type: 'google_translate_web',
     apiKey: '',
     endpoint: '',
+  },
+  fab: {
+    enabled: false,
+    autoHide: true,
+    openMode: 'inline',
+    position: {
+      side: 'right',
+      offsetX: 16,
+      offsetY: 80,
+    },
+    globalPosition: true,
+  },
+  uiPreferences: {
+    translateFontScale: 1.0,
+    recentLanguagePairs: [],
   },
 }

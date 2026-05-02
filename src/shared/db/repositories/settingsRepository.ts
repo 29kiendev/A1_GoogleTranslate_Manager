@@ -26,6 +26,12 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
     reviewStreak: { ...current.reviewStreak, ...(patch.reviewStreak ?? {}) },
     privacyMode: { ...current.privacyMode, ...(patch.privacyMode ?? {}) },
     provider: { ...current.provider, ...(patch.provider ?? {}) },
+    fab: {
+      ...current.fab,
+      ...(patch.fab ?? {}),
+      position: { ...current.fab.position, ...(patch.fab?.position ?? {}) },
+    },
+    uiPreferences: { ...current.uiPreferences, ...(patch.uiPreferences ?? {}) },
   }
   await saveSettings(updated)
   return updated

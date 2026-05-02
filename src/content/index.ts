@@ -47,7 +47,7 @@ async function performSave(): Promise<void> {
       targetLangLabel: payload.targetLangLabel,
       capturedFromUrl: payload.sourceUrl,
       captureMode: captureMode === 'auto' ? 'auto' : 'manual',
-      metadata: { sourceUrl: payload.sourceUrl },
+      metadata: { sourceUrl: payload.sourceUrl, context: payload.context ?? null },
     },
   })
 

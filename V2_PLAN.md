@@ -536,42 +536,387 @@ if (source === 'fab') {
 
 ---
 
-### SESSION 2 — FAB UX Polish
-**User request: req-2 (FAB dragging, zoom, glass, position persistence)**
-**Estimated complexity:** Medium
+### SESSION 2 — FAB UX Polish + Inline Popup Mode
+**User request: req-2 (FAB dragging, zoom, glass, position persistence, inline popup option)**
+**Estimated complexity:** High
+
+#### Background: Dual open mode
+The FAB now supports two opening modes controlled by `fab.openMode` setting:
+- `'inline'` (default): renders an iframe overlay directly on the page — stays in page context, click-outside to dismiss, Pin button detaches to a real window
+- `'window'`: opens `chrome.windows.create()` as before
 
 #### Files to modify:
 | File | Change |
 |---|---|
-| `src/content-fab/index.ts` | Add dragging, zoom-awareness, glass effects, per-domain position |
-| `src/options/App.tsx` | Add: FAB position side (left/right), global vs per-domain toggle |
+| `src/shared/types/settings.ts` | Add `fab.openMode: 'inline' \| 'window'` to `AppSettings` interface and `DEFAULT_SETTINGS` (default: `'inline'`) |
+| `src/shared/types/message.ts` | Add `'DETACH_FAB_POPUP'` and `'FAB_HIDE_IFRAME'` to `MessageType` union |
+| `src/background/index.ts` | Handle `DETACH_FAB_POPUP`: open `windows.create(?source=pinned)` + send `FAB_HIDE_IFRAME` to the sender tab |
+| `src/content-fab/index.ts` | Full rewrite: dragging, zoom-aware, glass, iframe overlay, `FAB_HIDE_IFRAME` listener |
+| `src/popup/App.tsx` | `handlePin`: detect `window.self !== window.top`, send `DETACH_FAB_POPUP` message instead of `windows.create` |
+| `src/options/App.tsx` | Add "Open mode" select (Inline on page / Separate window) inside the FAB section |
 
-#### Draggable implementation spec (in content-fab):
+#### `src/shared/types/settings.ts` change:
+Add `openMode` to the `fab` block:
+```typescript
+fab: {
+  enabled: boolean
+  autoHide: boolean
+  globalPosition: boolean
+  openMode: 'inline' | 'window'   // NEW
+  position: {
+    side: 'right' | 'left'
+    offsetX: number
+    offsetY: number
+  }
+}
 ```
-- mousedown on FAB: enter drag mode, record offset from cursor to button center
-- mousemove on document: update wrapper position (clamp to viewport bounds)
-- mouseup: exit drag mode, save position to storage
-- Threshold: only enter drag mode if mouse moves > 5px (to distinguish click from drag)
-- Zoom correction: all coordinate calculations divide by zoom factor
+In `DEFAULT_SETTINGS`, set `openMode: 'inline'`.
+
+Also add `fab` deep-merge to `settingsRepository.updateSettings` if not already present (it should be from Session 1 fix).
+
+#### `src/shared/types/message.ts` change:
+Add to the `MessageType` union:
+```typescript
+  | 'DETACH_FAB_POPUP'
+  | 'FAB_HIDE_IFRAME'
 ```
 
-#### Glass effect CSS (inline, injected by content-fab):
-```css
-background: rgba(26, 115, 232, 0.88);
-backdrop-filter: blur(12px);
--webkit-backdrop-filter: blur(12px);
-border: 1px solid rgba(255,255,255,0.3);
-box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-border-radius: 50%;
-transition: opacity 0.3s ease, transform 0.2s ease;
+#### `src/background/index.ts` change:
+Add alongside the `OPEN_FAB_POPUP` handler:
+```typescript
+if (message.type === 'DETACH_FAB_POPUP') {
+  // Open a real pinned window
+  chrome.windows.create({
+    url: chrome.runtime.getURL('popup.html') + '?source=pinned',
+    type: 'popup',
+    width: 420,
+    height: 560,
+  })
+  // Hide the iframe in the tab that sent this message
+  if (sender.tab?.id) {
+    chrome.tabs.sendMessage(sender.tab.id, { type: 'FAB_HIDE_IFRAME' })
+  }
+  sendResponse({ ok: true })
+  return
+}
+```
+Note: the `onMessage` listener callback signature must include `sender`:
+```typescript
+chrome.runtime.onMessage.addListener(
+  (message: ExtensionMessage, sender, sendResponse) => { ... }
+)
+```
+
+#### `src/popup/App.tsx` change — handlePin:
+```typescript
+const handlePin = () => {
+  const isEmbedded = window.self !== window.top
+  if (isEmbedded) {
+    // Running inside FAB iframe — ask content-fab to detach us
+    chrome.runtime.sendMessage({ type: 'DETACH_FAB_POPUP' })
+  } else {
+    chrome.windows.create({
+      url: chrome.runtime.getURL('popup.html') + '?source=pinned',
+      type: 'popup',
+      width: 420,
+      height: 560,
+    })
+    window.close()
+  }
+}
+```
+
+#### `src/content-fab/index.ts` full rewrite spec:
+
+```
+;(function () {
+  const SETTINGS_KEY = 'tv_settings'
+  let settings = null
+  let fabWrapper = null
+  let iframeEl = null
+  let backdropEl = null
+  let iframeVisible = false
+  let hideTimeout = null
+  let isDragging = false
+  let dragStartX, dragStartY, dragStartLeft, dragStartTop
+  let hasDragged = false
+
+  // ── INIT ─────────────────────────────────────────────────────────────────
+  async function init() {
+    const res = await chrome.storage.local.get(SETTINGS_KEY)
+    settings = res[SETTINGS_KEY]
+    if (!settings?.fab.enabled) return
+    createFAB()
+  }
+
+  // ── FAB BUTTON ───────────────────────────────────────────────────────────
+  function createFAB() {
+    if (fabWrapper) return
+    fabWrapper = document.createElement('div')
+    fabWrapper.id = 'tv-fab-wrapper'
+
+    const side = settings.fab.position.side || 'right'
+    const offsetX = settings.fab.position.offsetX ?? 16
+    const offsetY = settings.fab.position.offsetY ?? 80  // percent from top
+
+    // Restore saved position from storage (global or per-domain)
+    const posKey = settings.fab.globalPosition !== false
+      ? 'tv_fab_pos'
+      : 'tv_fab_pos_' + location.hostname.replace(/[^a-z0-9]/gi, '_')
+
+    Object.assign(fabWrapper.style, {
+      position: 'fixed',
+      zIndex: '2147483647',
+      width: '52px',
+      height: '52px',
+      cursor: 'pointer',
+      userSelect: 'none',
+      transition: 'opacity 0.3s ease',
+      // Initial default position; overridden by saved pos below
+      [side]: offsetX + 'px',
+      top: offsetY + '%',
+    })
+
+    // Apply zoom correction
+    function updateZoom() {
+      const zoom = window.outerWidth / window.innerWidth || 1
+      fabWrapper.style.transform = 'scale(' + (1 / zoom) + ')'
+      fabWrapper.style.transformOrigin = side === 'right' ? 'bottom right' : 'bottom left'
+    }
+    window.addEventListener('resize', updateZoom)
+    updateZoom()
+
+    // Load saved position
+    chrome.storage.local.get(posKey, res => {
+      const pos = res[posKey]
+      if (pos) {
+        fabWrapper.style.left = pos.left || 'auto'
+        fabWrapper.style.top = pos.top || 'auto'
+        fabWrapper.style.right = pos.right || 'auto'
+        fabWrapper.style.bottom = pos.bottom || 'auto'
+      }
+    })
+
+    // FAB button visual (glass circle with "T")
+    const fabBtn = document.createElement('div')
+    Object.assign(fabBtn.style, {
+      width: '52px',
+      height: '52px',
+      borderRadius: '50%',
+      background: 'rgba(26, 115, 232, 0.88)',
+      backdropFilter: 'blur(12px)',
+      webkitBackdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255,255,255,0.3)',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: 'white',
+      fontSize: '22px',
+      fontWeight: 'bold',
+      fontFamily: 'sans-serif',
+      transition: 'transform 0.2s ease',
+      userSelect: 'none',
+    })
+    fabBtn.innerText = 'T'
+    fabWrapper.appendChild(fabBtn)
+
+    // ── DRAGGING ─────────────────────────────────────────────────────────
+    fabWrapper.addEventListener('mousedown', e => {
+      isDragging = true
+      hasDragged = false
+      dragStartX = e.clientX
+      dragStartY = e.clientY
+      const rect = fabWrapper.getBoundingClientRect()
+      dragStartLeft = rect.left
+      dragStartTop = rect.top
+      e.preventDefault()
+    })
+
+    document.addEventListener('mousemove', e => {
+      if (!isDragging) return
+      const dx = e.clientX - dragStartX
+      const dy = e.clientY - dragStartY
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged = true
+      if (!hasDragged) return
+
+      const zoom = window.outerWidth / window.innerWidth || 1
+      let newLeft = (dragStartLeft + dx) * zoom
+      let newTop = (dragStartTop + dy) * zoom
+
+      // Clamp to viewport
+      const vw = window.innerWidth * zoom
+      const vh = window.innerHeight * zoom
+      newLeft = Math.max(0, Math.min(vw - 52, newLeft))
+      newTop = Math.max(0, Math.min(vh - 52, newTop))
+
+      fabWrapper.style.left = newLeft + 'px'
+      fabWrapper.style.top = newTop + 'px'
+      fabWrapper.style.right = 'auto'
+      fabWrapper.style.bottom = 'auto'
+    })
+
+    document.addEventListener('mouseup', () => {
+      if (!isDragging) return
+      isDragging = false
+      if (hasDragged) {
+        // Save position
+        const pos = {
+          left: fabWrapper.style.left,
+          top: fabWrapper.style.top,
+          right: '',
+          bottom: '',
+        }
+        chrome.storage.local.set({ [posKey]: pos })
+      }
+    })
+
+    // ── CLICK (only if not a drag) ────────────────────────────────────────
+    fabWrapper.addEventListener('click', () => {
+      if (hasDragged) return  // drag ended — not a click
+      if (settings.fab.openMode === 'window') {
+        chrome.runtime.sendMessage({ type: 'OPEN_FAB_POPUP' })
+      } else {
+        toggleIframe()
+      }
+    })
+
+    // ── AUTO-HIDE ─────────────────────────────────────────────────────────
+    if (settings.fab.autoHide) {
+      startAutoHide()
+      fabWrapper.addEventListener('mouseenter', () => { stopAutoHide(); fabWrapper.style.opacity = '1' })
+      fabWrapper.addEventListener('mouseleave', () => { startAutoHide() })
+    }
+
+    document.body.appendChild(fabWrapper)
+  }
+
+  function startAutoHide() {
+    stopAutoHide()
+    hideTimeout = setTimeout(() => { if (fabWrapper) fabWrapper.style.opacity = '0.3' }, 3000)
+  }
+  function stopAutoHide() {
+    if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null }
+  }
+
+  // ── IFRAME OVERLAY ───────────────────────────────────────────────────────
+  function toggleIframe() {
+    if (iframeVisible) { hideIframe(); return }
+    showIframe()
+  }
+
+  function showIframe() {
+    if (!backdropEl) createIframeOverlay()
+    backdropEl.style.display = 'block'
+    iframeEl.style.display = 'block'
+    iframeVisible = true
+  }
+
+  function hideIframe() {
+    if (backdropEl) backdropEl.style.display = 'none'
+    if (iframeEl) iframeEl.style.display = 'none'
+    iframeVisible = false
+  }
+
+  function createIframeOverlay() {
+    // Backdrop (click-outside to dismiss)
+    backdropEl = document.createElement('div')
+    Object.assign(backdropEl.style, {
+      position: 'fixed',
+      inset: '0',
+      zIndex: '2147483645',
+      background: 'transparent',
+      display: 'none',
+    })
+    backdropEl.addEventListener('click', hideIframe)
+    document.body.appendChild(backdropEl)
+
+    // Iframe
+    iframeEl = document.createElement('iframe')
+    iframeEl.src = chrome.runtime.getURL('popup.html') + '?source=fab'
+    Object.assign(iframeEl.style, {
+      position: 'fixed',
+      zIndex: '2147483646',
+      width: '420px',
+      height: '560px',
+      border: 'none',
+      borderRadius: '12px',
+      boxShadow: '0 8px 40px rgba(0,0,0,0.28)',
+      display: 'none',
+    })
+    // Position iframe near FAB (bottom-right default, avoid screen edge)
+    positionIframe()
+    document.body.appendChild(iframeEl)
+  }
+
+  function positionIframe() {
+    if (!iframeEl || !fabWrapper) return
+    const fabRect = fabWrapper.getBoundingClientRect()
+    const margin = 8
+    const iw = 420, ih = 560
+
+    // Try right of FAB, else left; try above FAB, else below
+    let left = fabRect.right + margin
+    if (left + iw > window.innerWidth) left = fabRect.left - iw - margin
+    left = Math.max(margin, left)
+
+    let top = fabRect.top
+    if (top + ih > window.innerHeight) top = window.innerHeight - ih - margin
+    top = Math.max(margin, top)
+
+    iframeEl.style.left = left + 'px'
+    iframeEl.style.top = top + 'px'
+  }
+
+  // ── MESSAGE LISTENER ─────────────────────────────────────────────────────
+  chrome.runtime.onMessage.addListener(message => {
+    if (message.type === 'FAB_HIDE_IFRAME') hideIframe()
+  })
+
+  // ── SETTINGS CHANGE ──────────────────────────────────────────────────────
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes[SETTINGS_KEY]) return
+    settings = changes[SETTINGS_KEY].newValue
+    if (!settings.fab.enabled) {
+      if (fabWrapper) { fabWrapper.remove(); fabWrapper = null }
+      hideIframe()
+    } else if (!fabWrapper) {
+      createFAB()
+    }
+  })
+
+  init()
+})()
+```
+
+#### `src/options/App.tsx` — add inside the FAB section, after the "Enable FAB" toggle:
+```tsx
+<label className="options-row">
+  <span>Open mode</span>
+  <select
+    value={settings.fab.openMode}
+    onChange={e => update({ fab: { ...settings.fab, openMode: e.target.value as 'inline' | 'window' } })}
+  >
+    <option value="inline">Inline on page (overlay)</option>
+    <option value="window">Separate popup window</option>
+  </select>
+</label>
 ```
 
 #### Session 2 Tests:
-- [ ] FAB can be dragged to any corner
-- [ ] Position persists after page reload
-- [ ] Position is per-domain when globalPosition=false
+- [ ] FAB appears on test webpage after enabling in Options
+- [ ] Glass effect renders on dark and light backgrounds
+- [ ] FAB auto-hides to 0.3 opacity after 3s, restores on hover
+- [ ] FAB can be dragged to any position
+- [ ] A drag does NOT trigger the click/open action
+- [ ] FAB position persists after page reload
+- [ ] FAB position is per-domain when `globalPosition=false`
 - [ ] FAB position is correct when browser zoom is 75%, 100%, 125%, 150%
-- [ ] Glass effect renders correctly on dark and light page backgrounds
+- [ ] **Inline mode**: clicking FAB shows iframe popup overlaid on the page
+- [ ] **Inline mode**: clicking outside the iframe hides it
+- [ ] **Inline mode**: clicking Pin (📌) inside the iframe opens a real detached window and hides the iframe
+- [ ] **Window mode**: clicking FAB opens a separate `chrome.windows.create()` popup
+- [ ] Open mode toggle in Options switches behavior immediately (after reload of content-fab or next FAB click)
 - [ ] `npm run typecheck && npm run build` → 0 errors
 
 ---

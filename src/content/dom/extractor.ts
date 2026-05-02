@@ -8,6 +8,7 @@ export interface ExtractedTranslation {
   sourceLangLabel?: string | null
   targetLangLabel?: string | null
   sourceUrl: string
+  context?: string | null
 }
 
 export function checkSelectors(): boolean {
@@ -63,6 +64,26 @@ function readLangLabels(): { sourceLangLabel: string | null; targetLangLabel: st
   }
 }
 
+function tryReadContext(): string | null {
+  try {
+    // Look for surrounding context on Google Translate page
+    // These are often examples or definitions shown alongside the translation
+    const selectors = [
+      '.AZ987e',              // GT internal class for examples
+      '.X669tc',              // Another possible example container
+      '[jsname="f31f9b"]',    // Example sentences container
+    ]
+    
+    for (const sel of selectors) {
+      const el = document.querySelector<HTMLElement>(sel)
+      if (el?.innerText.trim()) return el.innerText.trim()
+    }
+    return null
+  } catch (e) {
+    return null
+  }
+}
+
 export function extractTranslation(): ExtractedTranslation | null {
   const mobile = isMobilePage()
 
@@ -73,6 +94,7 @@ export function extractTranslation(): ExtractedTranslation | null {
 
   const { sourceLang, targetLang } = readLangsFromUrl()
   const { sourceLangLabel, targetLangLabel } = readLangLabels()
+  const context = tryReadContext()
 
   return {
     sourceText,
@@ -82,5 +104,6 @@ export function extractTranslation(): ExtractedTranslation | null {
     sourceLangLabel,
     targetLangLabel,
     sourceUrl: window.location.href,
+    context,
   }
 }

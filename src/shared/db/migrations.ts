@@ -32,4 +32,17 @@ export function migrate(
     translationTags.createIndex('tagId', 'tagId')
     translationTags.createIndex('pair', ['translationId', 'tagId'], { unique: true })
   }
+
+  if (oldVersion < 2) {
+    if (!db.objectStoreNames.contains('phrasebooks')) {
+      const phrasebooks = db.createObjectStore('phrasebooks', { keyPath: 'id' })
+      phrasebooks.createIndex('isDeleted', 'isDeleted')
+    }
+    if (!db.objectStoreNames.contains('phrasebook_items')) {
+      const items = db.createObjectStore('phrasebook_items', { keyPath: 'id' })
+      items.createIndex('phrasebookId', 'phrasebookId')
+      items.createIndex('translationId', 'translationId')
+      items.createIndex('pair', ['phrasebookId', 'translationId'], { unique: true })
+    }
+  }
 }

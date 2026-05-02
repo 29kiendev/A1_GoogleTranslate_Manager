@@ -37,6 +37,7 @@ export interface Translation {
     rawSourceLang?: string | null
     rawTargetLang?: string | null
     sourceUrl?: string | null
+    context?: string | null
   }
 }
 

@@ -49,3 +49,16 @@ export async function handleGetUsageHint(payload: { text: string; sourceLang: st
     return { ok: false, error: { code: 'UNKNOWN_ERROR', message: String(e) } }
   }
 }
+
+export async function handleTestProvider(): Promise<ExtensionResponse> {
+  const start = Date.now()
+  try {
+    const settings = await getSettings()
+    const provider = buildProvider(settings.provider)
+    const result = await provider.translate('Hello', 'en', 'es')
+    const latency = Date.now() - start
+    return { ok: true, data: { result, latencyMs: latency } }
+  } catch (e) {
+    return { ok: false, error: { code: 'UNKNOWN_ERROR', message: String(e) } }
+  }
+}

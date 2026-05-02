@@ -119,6 +119,8 @@ const LANGUAGES = [
   { code: 'zu', name: 'Zulu' },
 ]
 
+const langName = (code: string) => LANGUAGES.find(l => l.code === code)?.name ?? code
+
 function copyText(text: string): void {
   navigator.clipboard.writeText(text).catch(() => {
     const ta = document.createElement('textarea')
@@ -141,6 +143,7 @@ export default function PopupApp() {
   const [translateResult, setTranslateResult] = useState<Translation | null>(null)
   const [translateError, setTranslateError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [recentPairs, setRecentPairs] = useState<{ sourceLang: string; targetLang: string }[]>([])
 
   // History tab state
   const [query, setQuery] = useState('')
@@ -155,6 +158,9 @@ export default function PopupApp() {
   const [contentRevealed, setContentRevealed] = useState(false)
   const [debounceMs, setDebounceMs] = useState(300)
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [fontScale, setFontScale] = useState(1.0)
+  const [historyView, setHistoryView] = useState<'list' | 'tree'>('list')
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Review tab state
@@ -165,16 +171,16 @@ export default function PopupApp() {
   const [hint, setHint] = useState<string | null>(null)
   const [loadingHint, setLoadingHint] = useState(false)
 
-  const load = useCallback(async (q: string, folderId: string | null, starred: boolean) => {
+  const load = useCallback(async (q: string, folderId: string | null, starred: boolean, view: 'list' | 'tree') => {
     setLoading(true)
-    const res = q || folderId || starred
+    const res = q || folderId || starred || view === 'tree'
       ? await sendMessage<{ items: Translation[]; total: number }>({
           type: 'SEARCH_TRANSLATIONS',
           payload: {
             q: q || undefined,
             folderId: folderId ?? undefined,
             isStarred: starred || undefined,
-            limit: 30,
+            limit: view === 'tree' ? 200 : 30,
             sortBy: 'lastUsedAt',
             sortDirection: 'desc',
           },
@@ -201,11 +207,20 @@ export default function PopupApp() {
   }
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const source = urlParams.get('source')
+
     sendMessage<AppSettings>({ type: 'GET_SETTINGS' }).then(r => {
       if (r?.ok && r.data) {
-        setTab(r.data.popupDefaultView === 'translate' ? 'translate' : 'history')
+        if (source === 'fab' || source === 'pinned') {
+          setTab('translate')
+        } else {
+          setTab(r.data.popupDefaultView === 'translate' ? 'translate' : 'history')
+        }
         setMaskContent(r.data.privacyMode.maskPopupContent)
         setDebounceMs(r.data.searchDebounceMs)
+        setFontScale(r.data.uiPreferences?.translateFontScale ?? 1.0)
+        setRecentPairs(r.data.uiPreferences?.recentLanguagePairs ?? [])
       }
     })
     sendMessage<Folder[]>({ type: 'GET_FOLDER_TREE' }).then(r => {
@@ -214,31 +229,66 @@ export default function PopupApp() {
     sendMessage<number>({ type: 'GET_DUE_COUNT' }).then(r => {
       if (r?.ok && r.data !== undefined) setDueCount(r.data as number)
     })
-    load('', null, false)
   }, [load])
 
   useEffect(() => {
     clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => load(query, folderFilter, starFilter), debounceMs)
+    debounceRef.current = setTimeout(() => load(query, folderFilter, starFilter, historyView), debounceMs)
     return () => clearTimeout(debounceRef.current)
-  }, [query, folderFilter, starFilter, load, debounceMs])
+  }, [query, folderFilter, starFilter, load, debounceMs, historyView])
 
-  const handleTranslate = async () => {
-    if (!sourceText.trim()) return
+  const handleTranslate = async (overrideText?: string) => {
+    const text = (overrideText ?? sourceText).trim()
+    if (!text) return
     setTranslating(true)
     setTranslateError(null)
     setTranslateResult(null)
     const res = await sendMessage<Translation>({
       type: 'TRANSLATE_TEXT',
-      payload: { text: sourceText.trim(), sourceLang, targetLang },
+      payload: { text, sourceLang, targetLang },
     })
     setTranslating(false)
     if (res?.ok && res.data) {
       setTranslateResult(res.data)
+      updateRecentPairs(sourceLang, targetLang)
     } else {
       setTranslateError(res?.error?.message ?? 'Translation failed')
     }
   }
+
+  const updateRecentPairs = async (sl: string, tl: string) => {
+    const r = await sendMessage<AppSettings>({ type: 'GET_SETTINGS' })
+    if (r?.ok && r.data) {
+      const current = r.data.uiPreferences?.recentLanguagePairs ?? []
+      const next = [{ sourceLang: sl, targetLang: tl }, ...current.filter(p => !(p.sourceLang === sl && p.targetLang === tl))].slice(0, 3)
+      setRecentPairs(next)
+      sendMessage({ type: 'UPDATE_SETTINGS', payload: { uiPreferences: { ...r.data.uiPreferences, recentLanguagePairs: next } } })
+    }
+  }
+
+  const adjustFont = (delta: number) => {
+    const next = Math.min(2.0, Math.max(0.75, fontScale + delta))
+    setFontScale(next)
+    sendMessage<AppSettings>({ type: 'GET_SETTINGS' }).then(r => {
+      if (r?.ok && r.data) {
+        sendMessage({ type: 'UPDATE_SETTINGS', payload: { uiPreferences: { ...r.data.uiPreferences, translateFontScale: next } } })
+      }
+    })
+  }
+
+  useEffect(() => {
+    if (tab !== 'translate' || !translateResult) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && document.getSelection()?.toString() === '') {
+        e.preventDefault()
+        copyText(translateResult.translatedText)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [tab, translateResult])
 
   const handleSwap = () => {
     if (sourceLang === 'auto') return
@@ -328,6 +378,22 @@ export default function PopupApp() {
     chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') })
   }
 
+  const handlePin = () => {
+    const isEmbedded = window.self !== window.top
+    if (isEmbedded) {
+      // Running inside FAB iframe — ask content-fab to detach us
+      sendMessage({ type: 'DETACH_FAB_POPUP' })
+    } else {
+      chrome.windows.create({
+        url: chrome.runtime.getURL('popup.html') + '?source=pinned',
+        type: 'popup',
+        width: 420,
+        height: 560,
+      })
+      window.close()
+    }
+  }
+
   const switchToReview = () => {
     setTab('review')
     if (reviewQueue.length === 0) loadReviewQueue()
@@ -354,6 +420,7 @@ export default function PopupApp() {
               {dueCount} due
             </span>
           )}
+          <button className="gt-pin-btn" onClick={handlePin} title="Pin to window">📌</button>
           <button className="gt-vault-btn" onClick={openDashboard}>Vault</button>
         </div>
       </header>
@@ -362,6 +429,25 @@ export default function PopupApp() {
       <div className="gt-content">
         {tab === 'translate' && (
           <div className="gt-translate-view">
+            {/* Quick language pins */}
+            {recentPairs.length > 0 && (
+              <div className="gt-lang-pins">
+                {recentPairs.map(p => (
+                  <button
+                    key={`${p.sourceLang}-${p.targetLang}`}
+                    className="gt-lang-pin-chip"
+                    onClick={() => {
+                      setSourceLang(p.sourceLang)
+                      setTargetLang(p.targetLang)
+                      setTranslateResult(null)
+                    }}
+                  >
+                    {langName(p.sourceLang)} → {langName(p.targetLang)}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Language bar */}
             <div className="gt-lang-bar">
               <select
@@ -396,8 +482,17 @@ export default function PopupApp() {
                 placeholder="Enter text"
                 value={sourceText}
                 maxLength={5000}
+                style={{ fontSize: `${fontScale * 18}px` }}
                 onChange={e => { setSourceText(e.target.value); setTranslateResult(null) }}
                 onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleTranslate() }}
+                onPaste={e => {
+                  const pasted = e.clipboardData.getData('text')
+                  if (pasted.trim()) {
+                    setSourceText(pasted)
+                    setTranslateResult(null)
+                    setTimeout(() => handleTranslate(pasted), 300)
+                  }
+                }}
                 autoFocus
               />
               <div className="gt-source-footer">
@@ -410,14 +505,14 @@ export default function PopupApp() {
                     ✕
                   </button>
                 ) : <span style={{ width: 28 }} />}
+                <div className="gt-zoom-controls">
+                  <button className="gt-zoom-btn" onClick={() => adjustFont(-0.1)} title="Zoom out">−</button>
+                  <button className="gt-zoom-btn" onClick={() => adjustFont(0.1)} title="Zoom in">+</button>
+                </div>
                 <span className="gt-char-count">{sourceText.length} / 5000</span>
-                <button
-                  className="gt-translate-btn"
-                  onClick={handleTranslate}
-                  disabled={translating || !sourceText.trim()}
-                >
-                  {translating ? '…' : 'Translate'}
-                </button>
+                {sourceText && translateResult && (
+                  <button className="gt-retranslate-btn" onClick={() => handleTranslate()} title="Re-translate">↻</button>
+                )}
               </div>
             </div>
 
@@ -435,7 +530,7 @@ export default function PopupApp() {
                     {translateResult.usageCount > 1 && (
                       <div className="gt-duplicate-notice">Saved {translateResult.usageCount}×</div>
                     )}
-                    <div className="gt-result-text">{translateResult.translatedText}</div>
+                    <div className="gt-result-text" style={{ fontSize: `${fontScale * 22}px` }}>{translateResult.translatedText}</div>
                     <div className="gt-result-footer">
                       <button className="gt-action-btn" onClick={handleCopyResult} title={copied ? 'Copied!' : 'Copy translation'}>
                         {copied ? (
@@ -454,6 +549,27 @@ export default function PopupApp() {
                           : <svg width="20" height="20" viewBox="0 0 24 24"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z" fill="currentColor"/></svg>
                         }
                       </button>
+                      <a
+                        href={`https://translate.google.com/?sl=${sourceLang === 'auto' ? 'auto' : sourceLang}&tl=${targetLang}&text=${encodeURIComponent(sourceText)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="gt-open-gt-btn"
+                        title="Open in Google Translate"
+                      >
+                        Open in GT
+                      </a>
+                      <select
+                        className="gt-result-folder-select"
+                        value={translateResult.folderId ?? ''}
+                        onChange={async e => {
+                          const folderId = e.target.value || null
+                          await sendMessage({ type: 'MOVE_TRANSLATION', payload: { id: translateResult.id, folderId } })
+                          setTranslateResult({ ...translateResult, folderId })
+                        }}
+                      >
+                        <option value="">None (root)</option>
+                        {folders.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
                     </div>
                   </>
                 )}
@@ -465,7 +581,25 @@ export default function PopupApp() {
         {tab === 'history' && (
           <>
             <div className="popup-controls">
-              <SearchBox value={query} onChange={setQuery} />
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                <SearchBox value={query} onChange={setQuery} />
+                <div className="history-view-toggle">
+                  <button
+                    className={`view-toggle-btn${historyView === 'list' ? ' active' : ''}`}
+                    onClick={() => setHistoryView('list')}
+                    title="List view"
+                  >
+                    List
+                  </button>
+                  <button
+                    className={`view-toggle-btn${historyView === 'tree' ? ' active' : ''}`}
+                    onClick={() => setHistoryView('tree')}
+                    title="Tree view"
+                  >
+                    Tree
+                  </button>
+                </div>
+              </div>
               <div className="filter-row">
                 <FolderSelect folders={folders} value={folderFilter} onChange={setFolderFilter} />
                 <button
@@ -492,7 +626,7 @@ export default function PopupApp() {
               {!loading && items.length === 0 && (
                 <div className="empty-state">No translations found</div>
               )}
-              {!loading && items.map((item, idx) => (
+              {!loading && historyView === 'list' && items.map((item, idx) => (
                 <TranslationCard
                   key={item.id}
                   item={item}
@@ -504,6 +638,88 @@ export default function PopupApp() {
                   onMove={t => setMoveTarget(t)}
                 />
               ))}
+
+              {!loading && historyView === 'tree' && items.length > 0 && (
+                <div className="history-tree">
+                  {folders.map(folder => {
+                    const folderItems = items.filter(i => i.folderId === folder.id)
+                    if (folderItems.length === 0 && folder.parentId !== null) return null // Hide empty subfolders
+                    
+                    return (
+                      <div key={folder.id} className="tree-folder">
+                        <div 
+                          className="tree-folder-header"
+                          onClick={() => setCollapsedFolders(prev => ({ ...prev, [folder.id]: !prev[folder.id] }))}
+                        >
+                          <span className="tree-folder-icon">{collapsedFolders[folder.id] ? '▶' : '▼'}</span>
+                          <span className="tree-folder-icon">📁</span>
+                          <span className="tree-folder-text">{folder.name}</span>
+                          <span className="tree-folder-count">({folderItems.length})</span>
+                        </div>
+                        {!collapsedFolders[folder.id] && (
+                          <div className="tree-folder-content">
+                            {folderItems.map(item => (
+                              <div key={item.id} className="tree-item" onClick={() => copyText(item.translatedText)}>
+                                <div className="tree-item-text">
+                                  {item.sourceText} <span>→</span> {item.translatedText}
+                                </div>
+                                <div className="tree-item-actions">
+                                  <button 
+                                    className={`tree-action-btn${item.isStarred ? ' starred' : ''}`}
+                                    onClick={e => { e.stopPropagation(); handleStar(item) }}
+                                  >
+                                    ★
+                                  </button>
+                                  <button className="tree-action-btn" onClick={e => { e.stopPropagation(); copyText(item.translatedText) }}>
+                                    📋
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Unsorted items */}
+                  {items.filter(i => i.folderId === null).length > 0 && (
+                    <div className="tree-folder">
+                      <div 
+                        className="tree-folder-header"
+                        onClick={() => setCollapsedFolders(prev => ({ ...prev, unsorted: !prev.unsorted }))}
+                      >
+                        <span className="tree-folder-icon">{collapsedFolders.unsorted ? '▶' : '▼'}</span>
+                        <span className="tree-folder-icon">📄</span>
+                        <span className="tree-folder-text">Unsorted</span>
+                        <span className="tree-folder-count">({items.filter(i => i.folderId === null).length})</span>
+                      </div>
+                      {!collapsedFolders.unsorted && (
+                        <div className="tree-folder-content">
+                          {items.filter(i => i.folderId === null).map(item => (
+                            <div key={item.id} className="tree-item" onClick={() => copyText(item.translatedText)}>
+                              <div className="tree-item-text">
+                                {item.sourceText} <span>→</span> {item.translatedText}
+                              </div>
+                              <div className="tree-item-actions">
+                                <button 
+                                  className={`tree-action-btn${item.isStarred ? ' starred' : ''}`}
+                                  onClick={e => { e.stopPropagation(); handleStar(item) }}
+                                >
+                                  ★
+                                </button>
+                                <button className="tree-action-btn" onClick={e => { e.stopPropagation(); copyText(item.translatedText) }}>
+                                  📋
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {moveTarget && (

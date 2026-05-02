@@ -2,6 +2,7 @@ import type { DBSchema } from 'idb'
 import type { Translation } from '../types/translation'
 import type { Folder } from '../types/folder'
 import type { Tag, TranslationTag } from '../types/tag'
+import type { Phrasebook, PhrasebookItem } from '../types/phrasebook'
 
 export interface TranslateVaultDB extends DBSchema {
   translations: {
@@ -42,6 +43,22 @@ export interface TranslateVaultDB extends DBSchema {
     indexes: {
       translationId: string
       tagId: string
+      pair: [string, string]
+    }
+  }
+  phrasebooks: {
+    key: string
+    value: Phrasebook
+    indexes: {
+      isDeleted: number
+    }
+  }
+  phrasebook_items: {
+    key: string
+    value: PhrasebookItem
+    indexes: {
+      phrasebookId: string
+      translationId: string
       pair: [string, string]
     }
   }
