@@ -55,7 +55,6 @@ const LANGUAGES = [
   { code: 'jw', name: 'Javanese' },
   { code: 'kn', name: 'Kannada' },
   { code: 'kk', name: 'Kazakh' },
-  { code: 'kk', name: 'Kazakh' },
   { code: 'km', name: 'Khmer' },
   { code: 'rw', name: 'Kinyarwanda' },
   { code: 'ko', name: 'Korean' },
@@ -162,6 +161,7 @@ export default function PopupApp() {
   const [fontScale, setFontScale] = useState(1.0)
   const [historyView, setHistoryView] = useState<'list' | 'tree'>('list')
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({})
+  const [learningEnabled, setLearningEnabled] = useState(true)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const translateRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -223,6 +223,7 @@ export default function PopupApp() {
         setDebounceMs(r.data.searchDebounceMs)
         setFontScale(r.data.uiPreferences?.translateFontScale ?? 1.0)
         setRecentPairs(r.data.uiPreferences?.recentLanguagePairs ?? [])
+        setLearningEnabled(r.data.learningMode?.enabled ?? true)
       }
     })
     sendMessage<Folder[]>({ type: 'GET_FOLDER_TREE' }).then(r => {
@@ -431,7 +432,7 @@ export default function PopupApp() {
           &nbsp;Translate
         </div>
         <div className="gt-header-right">
-          {dueCount > 0 && (
+          {learningEnabled && dueCount > 0 && (
             <span className="gt-due-badge" onClick={switchToReview} title="Cards due for review">
               {dueCount} due
             </span>
@@ -816,16 +817,18 @@ export default function PopupApp() {
           </svg>
           <span>History</span>
         </button>
-        <button
-          className={`gt-nav-btn${tab === 'review' ? ' active' : ''}`}
-          onClick={switchToReview}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>
-          </svg>
-          {dueCount > 0 && <span className="gt-nav-badge">{dueCount}</span>}
-          <span>Review</span>
-        </button>
+        {learningEnabled && (
+          <button
+            className={`gt-nav-btn${tab === 'review' ? ' active' : ''}`}
+            onClick={switchToReview}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>
+            </svg>
+            {dueCount > 0 && <span className="gt-nav-badge">{dueCount}</span>}
+            <span>Review</span>
+          </button>
+        )}
       </nav>
     </div>
   )

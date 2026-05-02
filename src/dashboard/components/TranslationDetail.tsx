@@ -13,6 +13,7 @@ interface Props {
   hasNext?: boolean
   onPrev?: () => void
   onNext?: () => void
+  learningEnabled?: boolean
   onClose: () => void
   onUpdated: (updated: Translation) => void
   onDeleted: (id: string) => void
@@ -37,6 +38,7 @@ export function TranslationDetail({
   hasNext,
   onPrev,
   onNext,
+  learningEnabled = true,
   onClose,
   onUpdated,
   onDeleted,
@@ -309,13 +311,15 @@ export function TranslationDetail({
             onBlur={() => { if (noteDirty) handleSaveNote() }}
           />
         </div>
-        <div className="detail-field">
-          <div className="detail-field-label">Spaced Repetition</div>
-          <span className={`detail-srs-badge${item.srsEnabled ? ' enrolled' : ' not-enrolled'}`}>
-            {item.srsEnabled ? '🔥 Enrolled' : 'Not enrolled'}
-          </span>
-          {item.srsEnabled && nextReviewLabel && <div className="detail-meta">{nextReviewLabel}</div>}
-        </div>
+        {learningEnabled && (
+          <div className="detail-field">
+            <div className="detail-field-label">Spaced Repetition</div>
+            <span className={`detail-srs-badge${item.srsEnabled ? ' enrolled' : ' not-enrolled'}`}>
+              {item.srsEnabled ? '🔥 Enrolled' : 'Not enrolled'}
+            </span>
+            {item.srsEnabled && nextReviewLabel && <div className="detail-meta">{nextReviewLabel}</div>}
+          </div>
+        )}
         <div className="detail-field">
           <div className="detail-field-label">Stats</div>
           <div className="detail-meta">Looked up {item.usageCount}× · Added {formatDate(item.createdAt)}</div>
@@ -333,7 +337,9 @@ export function TranslationDetail({
             <button onClick={() => copyText(item.sourceText)}>Copy Original</button>
             <button onClick={() => copyText(item.translatedText)}>Copy Translation</button>
             <button onClick={handleStar}>{item.isStarred ? '★ Unstar' : '☆ Star'}</button>
-            <button className="btn-primary" onClick={handleEnrollSRS}>{item.srsEnabled ? 'Unenroll SRS' : 'Enroll in SRS'}</button>
+            {learningEnabled && (
+              <button className="btn-primary" onClick={handleEnrollSRS}>{item.srsEnabled ? 'Unenroll SRS' : 'Enroll in SRS'}</button>
+            )}
             <button className="btn-danger" onClick={handleDelete}>Delete</button>
           </>
         )}
@@ -415,7 +421,9 @@ export function TranslationDetail({
                <button onClick={() => copyText(item.sourceText)}>Copy Original</button>
                <button onClick={() => copyText(item.translatedText)}>Copy Translation</button>
                <button onClick={handleStar}>{item.isStarred ? '★ Unstar' : '☆ Star'}</button>
-               <button className="btn-primary" onClick={handleEnrollSRS}>{item.srsEnabled ? 'Unenroll SRS' : 'Enroll in SRS'}</button>
+               {learningEnabled && (
+                 <button className="btn-primary" onClick={handleEnrollSRS}>{item.srsEnabled ? 'Unenroll SRS' : 'Enroll in SRS'}</button>
+               )}
                <button className="btn-danger" onClick={handleDelete}>Delete</button>
             </div>
           </div>

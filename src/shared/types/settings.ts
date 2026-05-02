@@ -16,6 +16,9 @@ export interface AppSettings {
     autoEnrollOnSave: boolean
     dailyReviewLimit: number
   }
+  learningMode: {
+    enabled: boolean
+  }
   reviewStreak: {
     currentDays: number
     lastReviewDate: string | null
@@ -61,6 +64,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     enabled: true,
     autoEnrollOnSave: false,
     dailyReviewLimit: 20,
+  },
+  learningMode: {
+    enabled: true,
   },
   reviewStreak: {
     currentDays: 0,

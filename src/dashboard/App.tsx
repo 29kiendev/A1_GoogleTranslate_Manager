@@ -339,6 +339,7 @@ export default function DashboardApp() {
 
   const showReviewButton = settings?.srs?.enabled && dueCount > 0
   const streak = settings?.reviewStreak?.currentDays ?? 0
+  const learningEnabled = settings?.learningMode?.enabled ?? true
 
   return (
     <div className="layout">
@@ -357,7 +358,7 @@ export default function DashboardApp() {
           {streak > 1 && (
             <span className="streak-badge" title="Daily review streak">🔥 {streak}</span>
           )}
-          {showReviewButton && (
+          {learningEnabled && showReviewButton && (
             <button className="btn" onClick={() => setView('review')} style={{ color: '#1a73e8' }}>
               🎯 Review ({dueCount})
             </button>
@@ -368,7 +369,9 @@ export default function DashboardApp() {
           <button className="btn btn-primary" onClick={() => setView('translate')}>+ Translate</button>
           <button className="btn" onClick={() => setView('batch_import')}>+ Batch Import</button>
           <button className="btn" onClick={() => setView('stats')} title="Statistics">📊 Stats</button>
-          <button className="btn" onClick={() => setView('phrasebook')} title="Phrasebook">📚 Phrasebook</button>
+          {learningEnabled && (
+            <button className="btn" onClick={() => setView('phrasebook')} title="Phrasebook">📚 Phrasebook</button>
+          )}
           <div style={{ position: 'relative' }}>
             <button className="btn" onClick={() => setMoreOpen(v => !v)}>⋯ More</button>
             {moreOpen && (
@@ -426,7 +429,7 @@ export default function DashboardApp() {
             <SettingsView onClose={() => setView('list')} />
           )}
           {view === 'stats' && (
-            <StatsView langPairs={langPairs} dueCount={dueCount} />
+            <StatsView langPairs={langPairs} dueCount={dueCount} learningEnabled={learningEnabled} />
           )}
           {view === 'phrasebook' && (
             <PhrasebookView />
@@ -467,6 +470,7 @@ export default function DashboardApp() {
                   hasNext={selectedIndex < total - 1}
                   onPrev={handlePrev}
                   onNext={handleNext}
+                  learningEnabled={learningEnabled}
                   onClose={() => { setSelectedId(null); setAutoExpandId(null) }}
                   onUpdated={handleUpdated}
                   onDeleted={handleDeleted}
@@ -907,7 +911,7 @@ function TranslateView({ folders, onDone }: { folders: Folder[]; onDone: () => v
   )
 }
 
-function StatsView({ langPairs, dueCount }: { langPairs: LangPairCount[], dueCount: number }) {
+function StatsView({ langPairs, dueCount, learningEnabled }: { langPairs: LangPairCount[], dueCount: number, learningEnabled: boolean }) {
   const [weeklyData, setWeeklyData] = useState<{ label: string, count: number }[]>([])
   const [srsStats, setSrsStats] = useState<{ enrolled: number, due: number } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -990,7 +994,7 @@ function StatsView({ langPairs, dueCount }: { langPairs: LangPairCount[], dueCou
           </div>
         ) : <p style={{ color: 'var(--muted)', fontSize: 13 }}>No data yet</p>}
       </section>
-      {srsStats && (
+      {learningEnabled && srsStats && (
         <section className="stats-section">
           <h3>SRS retention</h3>
           {srsStats.enrolled > 0 ? (
